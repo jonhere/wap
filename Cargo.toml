@@ -2,3 +2,4 @@
 name = "wap"
 version = "0.1.0"
 authors = ["Jonathan Howard <jonathan@unbiased.name>"]
+build = "build.rs"
