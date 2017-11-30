@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Wap Test</title>
+  <script src="src/wap.js"></script>
+  <script>window.app = Wap.wap("./target/wasm32-unknown-unknown/release/examples/test.wasm");</script>
+</head>
+
+<body>
+  <script>
+    // todo better error
+    if (!window.app) {
+      document.writeln("Script error. Check console for detail.");
+    } else {
+      delete window.app;
+    }
+  </script>
+  <noscript>
+    Javascript required
+  </noscript>
+</body>
+
+</html>
