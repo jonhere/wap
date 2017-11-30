@@ -2,4 +2,10 @@
 name = "wap"
 version = "0.1.0"
 authors = ["Jonathan Howard <jonathan@unbiased.name>"]
+description = "Wap library allows you to write a web page app exclusively in Rust"
+repository = "https://github.com/jonhere/wap"
+readme = "README.md"
+keywords = ["web","wasm","webassembly","javascript"]
+categories = ["web-programming"]
+license = "MIT/Apache-2.0"
 build = "build.rs"

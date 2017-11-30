@@ -9,7 +9,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 ## Note
 * Version 0.1.x is very much unstable work in progress.
 * Alot of javascript iregularity so maybe major changes.
-* Direction unknown, not aimed as creating highest of speed code but good a starting point. Will be kept minimal.
+* Direction unknown, not aimed as creating highest of speed code but good as starting point. Will be kept minimal.
 * Reading the source highly advised.
 * You can always call eval.
 
