@@ -33,7 +33,7 @@ wap_begin!(|window| {
         ],
     );
 
-    let instance = instance();
+    let instance = webassembly_instance();
     let exports = get(&instance, "exports").unwrap();
     let fn_loop = get(&exports, "fn_loop").unwrap();
     let raf = get(&window, "requestAnimationFrame").unwrap();

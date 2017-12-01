@@ -1,3 +1,7 @@
+//! Wap library allows you to write a web page app exclusively in Rust.
+//!
+
+
 use std::mem;
 use std::ffi::CStr;
 use std::os::raw::c_char;
@@ -53,11 +57,16 @@ static mut INSTANCE: f64 = 0.0;
 
 #[derive(Clone)]
 struct Index(f64);
+
+/// Rc reference count to JavaScripts exclusive types; which get references stored internally and dropped when finished with WapRc.
 #[derive(Clone)]
 pub struct WapRc(Rc<Index>);
+
+/// Weak companion to WapRc
 #[derive(Clone)]
 pub struct WapWeak(Weak<Index>);
 
+/// The main data communication type in and out of function calls.
 pub enum JsType {
     Null,
     Undefined,
@@ -138,7 +147,7 @@ fn raw_instance() -> f64 {
     unsafe { INSTANCE }
 }
 
-pub fn instance() -> WapRc {
+pub fn webassembly_instance() -> WapRc {
     let index = unsafe { wap_clone(raw_instance()) };
     WapRc::new(index)
 }
@@ -146,7 +155,6 @@ pub fn instance() -> WapRc {
 /// Unmaps the instance which will allow JS to GC it.
 /// WapRc are still safe to be dropped after calling this.
 /// So long as no refs are holding it elsewhere.
-// todo do i want unsafe?
 pub unsafe fn shutdown() {
     wap_unmap(INSTANCE);
     INSTANCE = 0.01;
@@ -429,6 +437,8 @@ pub unsafe fn wap_begin_init(instance: f64, global: f64) -> WapRc {
     WapRc::new(global)
 }
 
+/// Starting point from the boilerplait wap.js into the wasm. Takes a function pointer whos argument is
+/// a WapRc to JavaScripts global object.
 #[macro_export]
 macro_rules! wap_begin {
     ($fn:expr) => {
