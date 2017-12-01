@@ -12,87 +12,79 @@ const new_key = function () {
   return next++;
 }
 
-const js_string_from_rust_raw = function (memory, ptr) {
+const js_string_from_rust_raw = function (mu8, ptr) {
   let end = ptr;
-  while (memory[end] !== 0) {
+  while (mu8[end] !== 0) {
     end++;
   }
-  const u8 = memory.subarray(ptr, end);
+  const u8s = mu8.subarray(ptr, end);
   const td = new TextDecoder("UTF-8");
-  return td.decode(u8);
+  return td.decode(u8s);
 };
 
-const new_rust_raw_string = function (wap_alloc, memory, js) {
+const new_rust_raw_string = function (wap_alloc, mu8, js) {
   const te = new TextEncoder("UTF-8");
-  const u8 = te.encode(js);
-  const len = u8.length;
+  const u8s = te.encode(js);
+  const len = u8s.length;
   const ptr = wap_alloc(len + 1);
-  memory.set(u8, ptr);
-  memory[ptr + len] = 0;
+  mu8.set(u8s, ptr);
+  mu8[ptr + len] = 0;
   return ptr;
 };
 
-const wap_ret_helper = function (wap_alloc, memory, ret, ret_ptr) {
-  const ret_type = typeof ret;
-  if (ret === null) {
-    memory[ret_ptr] = 0;
-    debug("-> null");
-
-  } else if (ret_type === "undefined") {
-    memory[ret_ptr] = 1;
-    debug("-> undefined");
-
-  } else if (ret_type === "boolean") {
-    memory[ret_ptr] = 2;
-    debug("-> boolean " + ret);
-    memory[ret_ptr + 1] = ret ? 1 : 0;
-
-  } else if (ret_type === "number") {
-    memory[ret_ptr] = 3;
-    debug("-> number " + ret);
-    const b = new ArrayBuffer(8);
-    const f64 = new Float64Array(b);
-    f64[0] = ret;
-    const u8 = new Uint8Array(b);
-    memory.set(u8, ret_ptr + 1);
-
-  } else if (ret_type === "string") {
-    memory[ret_ptr] = 4;
-    debug("-> string " + ret);
-    const ptr = new_rust_raw_string(wap_alloc, memory, ret);
-    const b = new ArrayBuffer(4);
-    const u32 = new Uint32Array(b);
-    u32[0] = ptr;
-    const u8 = new Uint8Array(b);
-    memory.set(u8, ret_ptr + 1);
-
-  } else {
-    memory[ret_ptr] = 5;
-    const index = new_key();
-    debug("-> ref " + index);
-    wap.set(index, ret);
-    const b = new ArrayBuffer(8);
-    const f64 = new Float64Array(b);
-    f64[0] = index;
-    const u8 = new Uint8Array(b);
-    memory.set(u8, ret_ptr + 1);
-  }
-  //  debug("mem" + memory[ret_ptr] + memory[ret_ptr+1] + memory[ret_ptr+2] +
-  //                                        memory[ret_ptr+3] + memory[ret_ptr+4] +
-  //                                        memory[ret_ptr+5] + memory[ret_ptr+6] +
-  //                                        memory[ret_ptr+7] + memory[ret_ptr+8])
-}
+const TYPE_NULL = 0;
+const TYPE_UNDEFINED = 1;
+const TYPE_BOOLEAN = 2;
+const TYPE_NUMBER = 3;
+const TYPE_STRING = 4;
+const TYPE_REF = 5;
 
 const wap_get = function (instance_index, from_index, name_ptr, ret_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const mb = instance.exports.memory.buffer;
+  const mu8 = new Uint8Array(mb);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   debug("i" + instance_index + " get " + from_index + "[" + name + "]");
   const from = wap.get(from_index);
 
   const ret = from[name];
 
-  wap_ret_helper(instance.exports.wap_alloc, memory, ret, ret_ptr);
+  if (ret === null) {
+    debug("-> null");
+    return TYPE_NULL;
+  }
+  const ret_type = typeof ret;
+  if (ret_type === "undefined") {
+    debug("-> undefined");
+    return TYPE_UNDEFINED;
+
+  } else if (ret_type === "boolean") {
+    debug("-> boolean " + ret);
+    const mf64 = new Float64Array(mb, ret_ptr, 1);
+    mf64[0] = ret ? 1.0 : 0.0;
+    return TYPE_BOOLEAN;
+
+  } else if (ret_type === "number") {
+    debug("-> number " + ret);
+    const mf64 = new Float64Array(mb, ret_ptr, 1);
+    mf64[0] = ret;
+    return TYPE_NUMBER;
+
+  } else if (ret_type === "string") {
+    debug("-> string " + ret);
+    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mu8, ret);
+    const mu32 = new Uint32Array(mb, ret_ptr, 1);
+    mu32[0] = ptr;
+    return TYPE_STRING;
+
+  } else {
+    const index = new_key();
+    wap.set(index, ret);
+    debug("-> ref " + index);
+    const mf64 = new Float64Array(mb, ret_ptr, 1);
+    mf64[0] = index;
+    return TYPE_REF;
+  }
 };
 
 const clone = function (from_index) {
@@ -117,8 +109,8 @@ const new_object = function () {
 
 const new_string = function (instance_index, text_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
-  const text = js_string_from_rust_raw(memory, text_ptr);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
+  const text = js_string_from_rust_raw(mu8, text_ptr);
   const index = new_key();
   wap.set(index, text);
   debug("i" + instance_index + " new_string " + text + " " + index);
@@ -127,131 +119,147 @@ const new_string = function (instance_index, text_ptr) {
 
 const set_null = function (instance_index, object_index, name_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   o[name] = null;
 };
 
 const set_undefined = function (instance_index, object_index, name_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   o[name] = undefined;
 };
 
 const set_boolean = function (instance_index, object_index, name_ptr, val) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   o[name] = val > 0 ? true : false;
 };
 
 const set_number = function (instance_index, object_index, name_ptr, val) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   o[name] = val;
 };
 
 const set_string = function (instance_index, object_index, name_ptr, ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
-  const val = js_string_from_rust_raw(memory, ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const val = js_string_from_rust_raw(mu8, ptr);
   o[name] = val;
 };
 
 const set_ref = function (instance_index, object_index, name_ptr, index) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   o[name] = wap.get(index);
 };
 
-const obj_call = function (obj, instance_index, index_of_function, num_args, args_ptr, ret_ptr) {
+const obj_call = function (obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
   const instance = wap.get(instance_index);
+  const mb = instance.exports.memory.buffer;
+  const mu8 = new Uint8Array(mb);
+  const mf64 = new Float64Array(mb);
+  const mu32 = new Uint32Array(mb);
   const the_function = wap.get(index_of_function);
 
-  const memory = new Uint8Array(instance.exports.memory.buffer);
   let args = [];
   for (let i = 0; i < num_args; i++) {
-    switch (memory[args_ptr + i * 9]) {
-      case 0:
+    switch (mu8[at_ptr + i]) {
+      case TYPE_NULL:
         args.push(null);
         break;
-      case 1:
+      case TYPE_UNDEFINED:
         args.push(undefined);
         break;
-      case 2:
-        args.push((memory[args_ptr + i * 9 + 1] > 0) ? true : false);
+      case TYPE_BOOLEAN:
+        args.push((mf64[args_ptr / 8 + i] === 0.0) ? false : true);
         break;
-      case 3:
-        {
-          const b = new ArrayBuffer(8);
-          const u8 = new Uint8Array(b);
-          u8.set(memory.subarray(args_ptr + + i * 9 + 1, args_ptr + + i * 9 + 9));
-          const f64 = new Float64Array(b);
-          args.push(f64[0]);
-        }
+      case TYPE_NUMBER:
+        args.push(mf64[args_ptr / 8 + i]);
         break;
-      case 4:
-        {
-          const b = new ArrayBuffer(4);
-          const u8 = new Uint8Array(b);
-          u8.set(memory.subarray(args_ptr + i * 9 + 1, args_ptr + i * 9 + 5));
-          const u32 = new Uint32Array(b);
-          const s = js_string_from_rust_raw(memory, u32[0]);
-          args.push(s);
-        }
+      case TYPE_STRING:
+        const s = js_string_from_rust_raw(mu8, mu32[args_ptr / 4 + i]);
+        args.push(s);
         break;
-      case 5:
-        {
-          const b = new ArrayBuffer(8);
-          const u8 = new Uint8Array(b);
-          u8.set(memory.subarray(args_ptr + + i * 9 + 1, args_ptr + + i * 9 + 9));
-          const f64 = new Float64Array(b);
-          args.push(wap.get(f64[0]));
-        }
+      case TYPE_REF:
+        args.push(wap.get(mf64[args_ptr / 8 + i]));
         break;
     }
   }
 
   const ret = the_function.apply(obj, args);
 
-  wap_ret_helper(instance.exports.wap_alloc, memory, ret, ret_ptr);
+  if (ret === null) {
+    debug("-> null");
+    return TYPE_NULL;
+  }
+  const ret_type = typeof ret;
+  if (ret_type === "undefined") {
+    debug("-> undefined");
+    return TYPE_UNDEFINED;
+
+  } else if (ret_type === "boolean") {
+    debug("-> boolean " + ret);
+    mf64[ret_ptr / 8] = ret ? 1.0 : 0.0;
+    return TYPE_BOOLEAN;
+
+  } else if (ret_type === "number") {
+    debug("-> number " + ret);
+    mf64[ret_ptr / 8] = ret;
+    return TYPE_NUMBER;
+
+  } else if (ret_type === "string") {
+    debug("-> string " + ret);
+    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mu8, ret);
+    mu32[ret_ptr / 4] = ptr;
+    return TYPE_STRING;
+
+  } else {
+    const index = new_key();
+    wap.set(index, ret);
+    debug("-> ref " + index);
+    mf64[ret_ptr / 8] = index;
+    return TYPE_REF;
+  }
 }
 
-const call = function (instance_index, index_of_function, num_args, args_ptr, ret_ptr) {
+const call = function (instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
   debug("i" + instance_index + " call " + index_of_function + "(" + num_args + " args)");
-  return obj_call(this, instance_index, index_of_function, num_args, args_ptr, ret_ptr);
+  return obj_call(this, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
 };
 
-const bound_call = function (instance_index, index_of_object, index_of_function, num_args, args_ptr, ret_ptr) {
+const bound_call = function (instance_index, index_of_object, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
   debug("i" + instance_index + " call " + index_of_object + "." + index_of_function + "(" + num_args + " args)");
   const obj = wap.get(index_of_object);
-  return obj_call(obj, instance_index, index_of_function, num_args, args_ptr, ret_ptr);
+  return obj_call(obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
 };
 
 const wap_instanceof = function (instance_index, index_of_object, of_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
-  const type = js_string_from_rust_raw(memory, of_ptr);
+  const type = js_string_from_rust_raw(mu8, of_ptr);
   debug("i" + instance_index + " " + index_of_object + (eval("obj instanceof " + type) ? " instance of " : " NOT instance of ") + type);
   return eval("obj instanceof " + type);
 }
 
 const wap_delete = function (instance_index, index_of_object, name_ptr) {
   const instance = wap.get(instance_index);
-  const memory = new Uint8Array(instance.exports.memory.buffer);
+  const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
-  const name = js_string_from_rust_raw(memory, name_ptr);
+  const name = js_string_from_rust_raw(mu8, name_ptr);
   delete obj[name];
 }
 

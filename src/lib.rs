@@ -10,34 +10,42 @@ use std::rc::{Rc, Weak};
 //#[link(name = "env")]
 extern "C" {
     //#[link_name="wap_get"]
-    fn wap_get(instance: f64, from: f64, name: *mut u8, ret: *mut u8);
+    fn wap_get(instance: f64, from: f64, name: *const u8, ret: *mut f64) -> u8;
     fn wap_clone(index: f64) -> f64;
     fn wap_unmap(index: f64);
-    fn wap_set_null(instance: f64, object: f64, name: *mut u8);
-    fn wap_set_undefined(instance: f64, object: f64, name: *mut u8);
-    fn wap_set_boolean(instance: f64, object: f64, name: *mut u8, val: bool);
-    fn wap_set_number(instance: f64, object: f64, name: *mut u8, val: f64);
-    fn wap_set_string(instance: f64, object: f64, name: *mut u8, ptr: *mut u8);
-    fn wap_set_ref(instance: f64, object: f64, name: *mut u8, index: f64);
+    fn wap_set_null(instance: f64, object: f64, name: *const u8);
+    fn wap_set_undefined(instance: f64, object: f64, name: *const u8);
+    fn wap_set_boolean(instance: f64, object: f64, name: *const u8, val: bool);
+    fn wap_set_number(instance: f64, object: f64, name: *const u8, val: f64);
+    fn wap_set_string(instance: f64, object: f64, name: *const u8, ptr: *const u8);
+    fn wap_set_ref(instance: f64, object: f64, name: *const u8, index: f64);
     fn wap_new_object() -> f64;
-    fn wap_new_string(instance: f64, from: *mut u8) -> f64;
-    fn wap_call(instance: f64, index_of_function: f64, num_args: u32, args: *mut u8, ret: *mut u8);
+    fn wap_new_string(instance: f64, from: *const u8) -> f64;
+    fn wap_call(
+        instance: f64,
+        index_of_function: f64,
+        num_args: u32,
+        args_types: *const u8,
+        args: *const f64,
+        ret: *mut f64,
+    ) -> u8;
     fn wap_bound_call(
         instance: f64,
         index_of_object: f64,
         index_of_function: f64,
         num_args: u32,
-        args: *mut u8,
-        ret: *mut u8,
-    );
-    fn wap_instanceof(instance: f64, object: f64, of: *mut u8) -> bool;
-    fn wap_delete(instance: f64, object: f64, name: *mut u8);
+        args_types: *const u8,
+        args: *const f64,
+        ret: *mut f64,
+    ) -> u8;
+    fn wap_instanceof(instance: f64, object: f64, of: *const u8) -> bool;
+    fn wap_delete(instance: f64, object: f64, name: *const u8);
 //fn wap new_boolean
 //fn wap new_number
 //fn wap new_construct
-//fn wap_member_instanceof(instance: f64, object: f64, name: *mut u8, of: *mut u8,) -> bool;
-//fn wap_typeof(object: f64) -> u32
-//fn wap_member_typeof(instance: f64, object: f64, name: *mut u8) -> u32
+//fn wap_member_instanceof(instance: f64, object: f64, name: *const u8, of: *const u8,) -> bool;
+//fn wap_typeof(object: f64) -> u8
+//fn wap_member_typeof(instance: f64, object: f64, name: *const u8) -> u8
 }
 
 // todo see if better as thread_local
@@ -171,27 +179,23 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
     v.push(0);
     let name = v.as_mut_ptr();
 
-    // byte 0 type
-    // up to 8 for f64
-    let mut a = unsafe { mem::uninitialized::<[u8; 9]>() };
-    let ret8 = a.as_mut_ptr();
-
-    unsafe {
-        wap_get(raw_instance(), from.raw_index(), name, ret8);
-    }
-
-    let ret_type: RetTypes = unsafe { mem::transmute_copy(&*ret8) };
+    let mut ret64 = unsafe { mem::uninitialized::<f64>() };
+    let ret_type: RetTypes = unsafe {
+        mem::transmute(wap_get(
+            raw_instance(),
+            from.raw_index(),
+            name,
+            &mut ret64 as *mut f64,
+        ))
+    };
 
     match ret_type {
         RetTypes::Null => JsType::Null,
         RetTypes::Undefined => JsType::Undefined,
-        RetTypes::Boolean => JsType::Boolean(unsafe { *ret8.offset(1) } != 0),
-        RetTypes::Number => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Number(ret_f64)
-        }
+        RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
+        RetTypes::Number => JsType::Number(ret64),
         RetTypes::String => {
-            let str_ptr = unsafe { *(ret8.offset(1) as *const *const c_char) };
+            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
             let d = unsafe { CStr::from_ptr(str_ptr) };
             let b = d.to_bytes();
             let alloc_len = b.len() + 1;
@@ -199,10 +203,7 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
             wap_dealloc(str_ptr as *mut u8, alloc_len);
             JsType::String(s)
         }
-        RetTypes::Ref => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Ref(WapRc::new(ret_f64))
-        }
+        RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
     }
 }
 
@@ -254,9 +255,12 @@ pub fn set(object: &WapRc, name: &str, to: JsType) {
 
 // todo move args Borrow/generic
 pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
-    let num = args.len();
+    let num_args = args.len();
 
-    let mut buf = vec![unsafe { mem::uninitialized() }; 9 * num];
+    let mut at_buf = vec![unsafe { mem::uninitialized() }; num_args];
+    let args_types_ptr = at_buf.as_mut_ptr();
+
+    let mut buf = vec![unsafe { mem::uninitialized() }; num_args];
     let args_ptr = buf.as_mut_ptr();
 
     let mut save = Vec::new();
@@ -264,155 +268,55 @@ pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
     for (i, arg) in args.iter().enumerate() {
         match arg {
             &JsType::Null => {
-                buf[9 * i] = 0;
+                at_buf[i] = RetTypes::Null as u8;
             }
             &JsType::Undefined => {
-                buf[9 * i] = 1;
+                at_buf[i] = RetTypes::Undefined as u8;
             }
             &JsType::Boolean(b) => {
-                buf[9 * i] = 2;
-                buf[9 * i + 1] = b as u8;
+                at_buf[i] = RetTypes::Boolean as u8;
+                buf[i] = if b { 1.0 } else { 0.0 };
             }
             &JsType::Number(n) => {
-                buf[9 * i] = 3;
-                unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut f64) = n;
-                }
+                at_buf[i] = RetTypes::Number as u8;
+                buf[i] = n;
             }
             &JsType::String(ref s) => {
-                buf[9 * i] = 4;
+                at_buf[i] = RetTypes::String as u8;
                 let mut v = s.clone().into_bytes();
                 v.push(0);
-                let p = v.as_mut_ptr();
+                let p = v.as_ptr();
                 save.push(v);
                 unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut *mut u8) = p as *mut u8;
+                    *(&mut buf[i] as *mut f64 as *mut *const u8) = p;
                 }
             }
             &JsType::Ref(ref r) => {
-                buf[9 * i] = 5;
-                unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut f64) = r.raw_index();
-                }
+                at_buf[i] = RetTypes::Ref as u8;
+                buf[i] = r.raw_index();
             }
         }
     }
 
-    // byte 0 type
-    // up to 8 for f64
-    let mut a = unsafe { mem::uninitialized::<[u8; 9]>() };
-    let ret8 = a.as_mut_ptr();
-
-    unsafe {
-        wap_call(
+    let mut ret64 = unsafe { mem::uninitialized::<f64>() };
+    let ret_type: RetTypes = unsafe {
+        mem::transmute(wap_call(
             raw_instance(),
             function.raw_index(),
-            num as u32,
+            num_args as u32,
+            args_types_ptr,
             args_ptr,
-            ret8,
-        );
-    }
-
-    let ret_type: RetTypes = unsafe { mem::transmute_copy(&*ret8) };
+            &mut ret64 as *mut f64,
+        ))
+    };
 
     match ret_type {
         RetTypes::Null => JsType::Null,
         RetTypes::Undefined => JsType::Undefined,
-        RetTypes::Boolean => JsType::Boolean(unsafe { *ret8.offset(1) } != 0),
-        RetTypes::Number => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Number(ret_f64)
-        }
+        RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
+        RetTypes::Number => JsType::Number(ret64),
         RetTypes::String => {
-            let ret_u32: u32 = unsafe { *(ret8.offset(1) as *mut u32) };
-            let d = unsafe { CStr::from_ptr(ret_u32 as *const c_char) };
-            let b = d.to_bytes();
-            let alloc_len = b.len() + 1;
-            let s = unsafe { String::from_utf8_unchecked(b.to_vec()) };
-            wap_dealloc(ret_u32 as *mut u8, alloc_len);
-            JsType::String(s)
-        }
-        RetTypes::Ref => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Ref(WapRc::new(ret_f64))
-        }
-    }
-}
-
-// almost identical code copy of call()
-pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
-    let num = args.len();
-
-    let mut buf = vec![unsafe { mem::uninitialized() }; 9 * num];
-    let args_ptr = buf.as_mut_ptr();
-
-    let mut save = Vec::new();
-
-    for (i, arg) in args.iter().enumerate() {
-        match arg {
-            &JsType::Null => {
-                buf[9 * i] = 0;
-            }
-            &JsType::Undefined => {
-                buf[9 * i] = 1;
-            }
-            &JsType::Boolean(b) => {
-                buf[9 * i] = 2;
-                buf[9 * i + 1] = b as u8;
-            }
-            &JsType::Number(n) => {
-                buf[9 * i] = 3;
-                unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut f64) = n;
-                }
-            }
-            &JsType::String(ref s) => {
-                buf[9 * i] = 4;
-                let mut v = s.clone().into_bytes();
-                v.push(0);
-                let p = v.as_mut_ptr();
-                save.push(v);
-                unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut *mut u8) = p;
-                }
-            }
-            &JsType::Ref(ref r) => {
-                buf[9 * i] = 5;
-                unsafe {
-                    *(args_ptr.offset(9 * i as isize + 1) as *mut f64) = r.raw_index();
-                }
-            }
-        }
-    }
-
-    // byte 0 type
-    // up to 8 for f64
-    let mut a = unsafe { mem::uninitialized::<[u8; 9]>() };
-    let ret8 = a.as_mut_ptr();
-
-    unsafe {
-        wap_bound_call(
-            raw_instance(),
-            object.raw_index(),
-            function.raw_index(),
-            num as u32,
-            args_ptr,
-            ret8,
-        );
-    }
-
-    let ret_type: RetTypes = unsafe { mem::transmute_copy(&*ret8) };
-
-    match ret_type {
-        RetTypes::Null => JsType::Null,
-        RetTypes::Undefined => JsType::Undefined,
-        RetTypes::Boolean => JsType::Boolean(unsafe { *ret8.offset(1) } != 0),
-        RetTypes::Number => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Number(ret_f64)
-        }
-        RetTypes::String => {
-            let str_ptr = unsafe { *(ret8.offset(1) as *const *const c_char) };
+            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
             let d = unsafe { CStr::from_ptr(str_ptr) };
             let b = d.to_bytes();
             let alloc_len = b.len() + 1;
@@ -420,10 +324,83 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
             wap_dealloc(str_ptr as *mut u8, alloc_len);
             JsType::String(s)
         }
-        RetTypes::Ref => {
-            let ret_f64: f64 = unsafe { *(ret8.offset(1) as *mut f64) };
-            JsType::Ref(WapRc::new(ret_f64))
+        RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
+    }
+}
+
+// almost identical code copy of call()
+pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
+    let num_args = args.len();
+
+    let mut at_buf = vec![unsafe { mem::uninitialized() }; num_args];
+    let args_types_ptr = at_buf.as_mut_ptr();
+
+    let mut buf = vec![unsafe { mem::uninitialized() }; num_args];
+    let args_ptr = buf.as_mut_ptr();
+
+    let mut save = Vec::new();
+
+    for (i, arg) in args.iter().enumerate() {
+        match arg {
+            &JsType::Null => {
+                at_buf[i] = RetTypes::Null as u8;
+            }
+            &JsType::Undefined => {
+                at_buf[i] = RetTypes::Undefined as u8;
+            }
+            &JsType::Boolean(b) => {
+                at_buf[i] = RetTypes::Boolean as u8;
+                buf[i] = if b { 1.0 } else { 0.0 };
+            }
+            &JsType::Number(n) => {
+                at_buf[i] = RetTypes::Number as u8;
+                buf[i] = n;
+            }
+            &JsType::String(ref s) => {
+                at_buf[i] = RetTypes::String as u8;
+                let mut v = s.clone().into_bytes();
+                v.push(0);
+                let p = v.as_ptr();
+                save.push(v);
+                unsafe {
+                    *(&mut buf[i] as *mut f64 as *mut *const u8) = p;
+                }
+            }
+            &JsType::Ref(ref r) => {
+                at_buf[i] = RetTypes::Ref as u8;
+                buf[i] = r.raw_index();
+            }
         }
+    }
+
+    let mut ret64 = unsafe { mem::uninitialized::<f64>() };
+    let ret_type: RetTypes = unsafe {
+        mem::transmute(wap_bound_call(
+            raw_instance(),
+            object.raw_index(),
+            function.raw_index(),
+            num_args as u32,
+            args_types_ptr,
+            args_ptr,
+            &mut ret64 as *mut f64,
+        ))
+    };
+
+    match ret_type {
+        RetTypes::Null => JsType::Null,
+        RetTypes::Undefined => JsType::Undefined,
+        RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
+        RetTypes::Number => JsType::Number(ret64),
+        RetTypes::String => {
+            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
+            let d = unsafe { CStr::from_ptr(str_ptr) };
+            let b = d.to_bytes();
+            let alloc_len = b.len() + 1;
+            let s = unsafe { String::from_utf8_unchecked(b.to_vec()) };
+            wap_dealloc(str_ptr as *mut u8, alloc_len);
+            JsType::String(s)
+        }
+        RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
     }
 }
 

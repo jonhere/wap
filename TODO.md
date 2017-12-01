@@ -12,5 +12,4 @@ __grep -r todo *__
 
 ### Maybies
 * nodejs support
-* Switch result to two u64. To simplify alignment. (maybe faster and potential future issue could break.)
 * Consider changing raw string from null terminated.
