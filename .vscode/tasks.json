@@ -12,7 +12,6 @@
                 "nightly",
                 "cargo",
                 "build",
-                "--release",
                 "--examples"
             ],
             "problemMatcher": [
