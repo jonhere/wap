@@ -10,15 +10,15 @@ wap_begin!(|window| {
     let body = get(&document, "body").unwrap();
     let _s = new_string("hello");
     let _o = new_object();
-    member_set(
+    set(
         &body,
         "innerHTML",
         JsType::String("<h1>Hello World</h1>".to_string()),
     );
     let _inner_html = get(&body, "innerHTML").unwrap_string();
 
-    member_set(&window, "test", JsType::Boolean(true));
-    member_delete(&window, "test");
+    set(&window, "test", JsType::Boolean(true));
+    delete(&window, "test");
 
     let eval = get(&window, "eval").unwrap();
     let random = call(&eval, &[JsType::String("Math.random".to_string())]).unwrap();
@@ -88,7 +88,7 @@ pub extern "C" fn fn_loop(time: f64) {
             true
         };
 
-        member_set(
+        set(
             s.body.as_ref().unwrap(),
             "innerText",
             JsType::String(

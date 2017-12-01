@@ -125,7 +125,7 @@ const new_string = function (instance_index, text_ptr) {
   return index;
 };
 
-const member_set_null = function (instance_index, object_index, name_ptr) {
+const set_null = function (instance_index, object_index, name_ptr) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -133,7 +133,7 @@ const member_set_null = function (instance_index, object_index, name_ptr) {
   o[name] = null;
 };
 
-const member_set_undefined = function (instance_index, object_index, name_ptr) {
+const set_undefined = function (instance_index, object_index, name_ptr) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -141,7 +141,7 @@ const member_set_undefined = function (instance_index, object_index, name_ptr) {
   o[name] = undefined;
 };
 
-const member_set_boolean = function (instance_index, object_index, name_ptr, val) {
+const set_boolean = function (instance_index, object_index, name_ptr, val) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -149,7 +149,7 @@ const member_set_boolean = function (instance_index, object_index, name_ptr, val
   o[name] = val > 0 ? true : false;
 };
 
-const member_set_number = function (instance_index, object_index, name_ptr, val) {
+const set_number = function (instance_index, object_index, name_ptr, val) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -157,7 +157,7 @@ const member_set_number = function (instance_index, object_index, name_ptr, val)
   o[name] = val;
 };
 
-const member_set_string = function (instance_index, object_index, name_ptr, ptr) {
+const set_string = function (instance_index, object_index, name_ptr, ptr) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -166,7 +166,7 @@ const member_set_string = function (instance_index, object_index, name_ptr, ptr)
   o[name] = val;
 };
 
-const member_set_ref = function (instance_index, object_index, name_ptr, index) {
+const set_ref = function (instance_index, object_index, name_ptr, index) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
@@ -243,10 +243,11 @@ const wap_instanceof = function (instance_index, index_of_object, of_ptr) {
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
   const type = js_string_from_rust_raw(memory, of_ptr);
+  debug("i" + instance_index + " " + index_of_object + (eval("obj instanceof " + type) ? " instance of " : " NOT instance of ") + type);
   return eval("obj instanceof " + type);
 }
 
-const wap_member_delete = function (instance_index, index_of_object, name_ptr) {
+const wap_delete = function (instance_index, index_of_object, name_ptr) {
   const instance = wap.get(instance_index);
   const memory = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
@@ -271,16 +272,16 @@ lib.wap = function (wasm_url, imports) {
   imports.env["wap_unmap"] = unmap;
   imports.env["wap_new_object"] = new_object;
   imports.env["wap_new_string"] = new_string;
-  imports.env["wap_member_set_null"] = member_set_null;
-  imports.env["wap_member_set_undefined"] = member_set_undefined;
-  imports.env["wap_member_set_boolean"] = member_set_boolean;
-  imports.env["wap_member_set_number"] = member_set_number;
-  imports.env["wap_member_set_string"] = member_set_string;
-  imports.env["wap_member_set_ref"] = member_set_ref;
+  imports.env["wap_set_null"] = set_null;
+  imports.env["wap_set_undefined"] = set_undefined;
+  imports.env["wap_set_boolean"] = set_boolean;
+  imports.env["wap_set_number"] = set_number;
+  imports.env["wap_set_string"] = set_string;
+  imports.env["wap_set_ref"] = set_ref;
   imports.env["wap_call"] = call;
   imports.env["wap_bound_call"] = bound_call;
   imports.env["wap_instanceof"] = wap_instanceof;
-  imports.env["wap_member_delete"] = wap_member_delete;
+  imports.env["wap_delete"] = wap_delete;
 
 
   fetch(wasm_url)

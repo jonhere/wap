@@ -13,12 +13,12 @@ extern "C" {
     fn wap_get(instance: f64, from: f64, name: *mut u8, ret: *mut u8);
     fn wap_clone(index: f64) -> f64;
     fn wap_unmap(index: f64);
-    fn wap_member_set_null(instance: f64, object: f64, name: *mut u8);
-    fn wap_member_set_undefined(instance: f64, object: f64, name: *mut u8);
-    fn wap_member_set_boolean(instance: f64, object: f64, name: *mut u8, val: bool);
-    fn wap_member_set_number(instance: f64, object: f64, name: *mut u8, val: f64);
-    fn wap_member_set_string(instance: f64, object: f64, name: *mut u8, ptr: *mut u8);
-    fn wap_member_set_ref(instance: f64, object: f64, name: *mut u8, index: f64);
+    fn wap_set_null(instance: f64, object: f64, name: *mut u8);
+    fn wap_set_undefined(instance: f64, object: f64, name: *mut u8);
+    fn wap_set_boolean(instance: f64, object: f64, name: *mut u8, val: bool);
+    fn wap_set_number(instance: f64, object: f64, name: *mut u8, val: f64);
+    fn wap_set_string(instance: f64, object: f64, name: *mut u8, ptr: *mut u8);
+    fn wap_set_ref(instance: f64, object: f64, name: *mut u8, index: f64);
     fn wap_new_object() -> f64;
     fn wap_new_string(instance: f64, from: *mut u8) -> f64;
     fn wap_call(instance: f64, index_of_function: f64, num_args: u32, args: *mut u8, ret: *mut u8);
@@ -31,8 +31,7 @@ extern "C" {
         ret: *mut u8,
     );
     fn wap_instanceof(instance: f64, object: f64, of: *mut u8) -> bool;
-    fn wap_member_delete(instance: f64, object: f64, name: *mut u8);
-//fn wap_set(instance: f64, object: f64, ptr: *mut u8);
+    fn wap_delete(instance: f64, object: f64, name: *mut u8);
 //fn wap new_boolean
 //fn wap new_number
 //fn wap new_construct
@@ -149,9 +148,10 @@ pub unsafe fn shutdown() {
 
 // alloc helpers from https://www.hellorust.com/demos/sha1/index.html
 // https://news.ycombinator.com/item?id=15780702
-// In order to work with the memory we expose (de)allocation methods
+/// Not to be called directly.
+/// Used by js boilerplate.
 #[no_mangle]
-pub extern "C" fn wap_alloc(size: usize) -> *mut u8 {
+pub unsafe extern "C" fn wap_alloc(size: usize) -> *mut u8 {
     //unsafe { FORGOTTEN_MEM += size as isize };
     let mut buf = Vec::with_capacity(size);
     let ptr = buf.as_mut_ptr();
@@ -159,8 +159,7 @@ pub extern "C" fn wap_alloc(size: usize) -> *mut u8 {
     ptr
 }
 
-#[no_mangle]
-pub extern "C" fn wap_dealloc(ptr: *mut u8, cap: usize) {
+fn wap_dealloc(ptr: *mut u8, cap: usize) {
     unsafe {
         //FORGOTTEN_MEM -= cap as isize;
         let _ = Vec::from_raw_parts(ptr, 0, cap);
@@ -221,34 +220,34 @@ pub fn new_string(text: &str) -> WapRc {
     WapRc::new(index)
 }
 
-pub fn member_set(object: &WapRc, name: &str, to: JsType) {
+pub fn set(object: &WapRc, name: &str, to: JsType) {
     let mut v = name.to_string().into_bytes();
     v.push(0);
     let name = v.as_mut_ptr();
 
     match to {
         JsType::Null => unsafe {
-            wap_member_set_null(raw_instance(), object.raw_index(), name);
+            wap_set_null(raw_instance(), object.raw_index(), name);
         },
         JsType::Undefined => unsafe {
-            wap_member_set_undefined(raw_instance(), object.raw_index(), name);
+            wap_set_undefined(raw_instance(), object.raw_index(), name);
         },
         JsType::Boolean(b) => unsafe {
-            wap_member_set_boolean(raw_instance(), object.raw_index(), name, b);
+            wap_set_boolean(raw_instance(), object.raw_index(), name, b);
         },
         JsType::Number(n) => unsafe {
-            wap_member_set_number(raw_instance(), object.raw_index(), name, n);
+            wap_set_number(raw_instance(), object.raw_index(), name, n);
         },
         JsType::String(s) => {
             let mut v = s.to_string().into_bytes();
             v.push(0);
             let s = v.as_mut_ptr();
             unsafe {
-                wap_member_set_string(raw_instance(), object.raw_index(), name, s);
+                wap_set_string(raw_instance(), object.raw_index(), name, s);
             }
         }
         JsType::Ref(r) => unsafe {
-            wap_member_set_ref(raw_instance(), object.raw_index(), name, r.raw_index());
+            wap_set_ref(raw_instance(), object.raw_index(), name, r.raw_index());
         },
     }
 }
@@ -436,18 +435,18 @@ pub fn instanceof(item: &WapRc, of: &str) -> bool {
     unsafe { wap_instanceof(raw_instance(), item.raw_index(), of) }
 }
 
-pub fn member_delete(object: &WapRc, name: &str) {
+pub fn delete(object: &WapRc, name: &str) {
     let mut v = name.to_string().into_bytes();
     v.push(0);
     let name = v.as_mut_ptr();
 
     unsafe {
-        wap_member_delete(raw_instance(), object.raw_index(), name);
+        wap_delete(raw_instance(), object.raw_index(), name);
     }
 }
 
 /// Not to be called directly.
-/// Used by wap_begin macro
+/// Used by wap_begin macro.
 pub unsafe fn wap_begin_init(instance: f64, global: f64) -> WapRc {
     INSTANCE = instance;
     WapRc::new(global)
