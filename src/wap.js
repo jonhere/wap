@@ -1,12 +1,17 @@
 // file copyright release to public domain
 
+// note: ensure src calls comply with the simple stripping rule used in build.rs
+// i.e. "debug(" at start of line
+// ");" at end of any ending line
+// no single unenclosed if/loops calling debug
 const debug = function (s) {
   console.log(s);
 };
 
 const wap = new Map();
 
-let next = 1; // could start negative to double max range but small good to debug
+// could start negative to double max range but small good to debug
+let next = 1;
 const new_key = function () {
   // breaks at f64 at 2^53
   return next++;
