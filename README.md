@@ -8,6 +8,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 
 ## Note
 * Version 0.1.x is very much unstable work in progress.
+* [release notes](https://github.com/jonhere/wap/releases)
 * Alot of javascript iregularity so maybe major changes.
 * Direction unknown, not aimed as creating highest of speed code but good as starting point. Will be kept minimal.
 * Reading the source highly advised.
@@ -19,7 +20,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * edit Cargo.toml
 * - [dependencies]
 * - wap = { git = "https://github.com/jonhere/wap" }
-* copy then edit [hello_world.html](https://raw.githubusercontent.com/jonhere/wap/master/hello_world_release.html) as NAME_release.html to project root
+* copy then edit [hello_world_release.html](https://raw.githubusercontent.com/jonhere/wap/master/hello_world_release.html) as NAME_release.html to project root
 * - title
 * - hello_world.wasm to NAME.wasm
 * copy [hello_world.rs](https://raw.githubusercontent.com/jonhere/wap/master/examples/hello_world.rs) to src/main.rs
