@@ -13,7 +13,7 @@ wap_begin!(|window| {
     set(
         &body,
         "innerHTML",
-        JsType::String("<h1>Hello World</h1>".to_string()),
+        "<h1>Hello World</h1>".to_string().into(),
     );
     let _inner_html = get(&body, "innerHTML").unwrap_string();
 
@@ -21,15 +21,15 @@ wap_begin!(|window| {
     delete(&window, "test");
 
     let eval = get(&window, "eval").unwrap();
-    let random = call(&eval, &[JsType::String("Math.random".to_string())]).unwrap();
+    let random = call(&eval, &["Math.random".to_string().into()]).unwrap();
     let random = call(&random, &[]).unwrap_number();
     call(
         &eval,
         &[
-            JsType::String(format!(
+            format!(
                 "alert(\"Eval called.\\nOk to begin RAF loop\\n{}\");",
                 random
-            )),
+            ).into(),
         ],
     );
 

@@ -21,7 +21,6 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * - wap = { git = "https://github.com/jonhere/wap" }
 * copy then edit [hello_world.html](https://raw.githubusercontent.com/jonhere/wap/master/hello_world_release.html) as NAME_release.html to project root
 * - title
-* - src/wap.js to target/wasm32-unknown-unknown/release/wap.js
 * - hello_world.wasm to NAME.wasm
 * copy [hello_world.rs](https://raw.githubusercontent.com/jonhere/wap/master/examples/hello_world.rs) to src/main.rs
 * add .cargo/config

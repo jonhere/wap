@@ -143,6 +143,30 @@ impl JsType {
     }
 }
 
+impl From<bool> for JsType {
+    fn from(b :bool) -> Self {
+        JsType::Boolean(b)
+    }
+}
+
+impl From<f64> for JsType {
+    fn from(n :f64) -> Self {
+        JsType::Number(n)
+    }
+}
+
+impl From<String> for JsType {
+    fn from(s :String) -> Self {
+        JsType::String(s)
+    }
+}
+
+impl From<WapRc> for JsType {
+    fn from(r :WapRc) -> Self {
+        JsType::Ref(r)
+    }
+}
+
 fn raw_instance() -> f64 {
     unsafe { INSTANCE }
 }
@@ -261,50 +285,34 @@ pub fn set(object: &WapRc, name: &str, to: JsType) {
     }
 }
 
-// todo move args Borrow/generic
+
 pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
-    let num_args = args.len();
-
-    let mut at_buf = vec![unsafe { mem::uninitialized() }; num_args];
-    let args_types_ptr = at_buf.as_mut_ptr();
-
-    let mut buf = vec![unsafe { mem::uninitialized() }; num_args];
-    let args_ptr = buf.as_mut_ptr();
-
     let mut save = Vec::new();
-
-    for (i, arg) in args.iter().enumerate() {
+    let (mut at_buf, mut buf) = args.into_iter().map(|arg| {
         match arg {
-            &JsType::Null => {
-                at_buf[i] = RetTypes::Null as u8;
-            }
-            &JsType::Undefined => {
-                at_buf[i] = RetTypes::Undefined as u8;
-            }
-            &JsType::Boolean(b) => {
-                at_buf[i] = RetTypes::Boolean as u8;
-                buf[i] = if b { 1.0 } else { 0.0 };
-            }
-            &JsType::Number(n) => {
-                at_buf[i] = RetTypes::Number as u8;
-                buf[i] = n;
-            }
+            &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
+            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe { mem::uninitialized() }),
+            &JsType::Boolean(b) =>
+                (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
+            &JsType::Number(n) =>
+                (RetTypes::Number as u8, n),
             &JsType::String(ref s) => {
-                at_buf[i] = RetTypes::String as u8;
                 let mut v = s.clone().into_bytes();
                 v.push(0);
                 let p = v.as_ptr();
                 save.push(v);
+                let mut f = unsafe { mem::uninitialized() };
                 unsafe {
-                    *(&mut buf[i] as *mut f64 as *mut *const u8) = p;
-                }
+                    *(&mut f as *mut f64 as *mut *const u8) = p;
+                };
+                (RetTypes::String as u8, f)
             }
-            &JsType::Ref(ref r) => {
-                at_buf[i] = RetTypes::Ref as u8;
-                buf[i] = r.raw_index();
-            }
+            &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
         }
-    }
+    }).unzip::<_, _, Vec<u8>, Vec<f64>>();
+    let num_args = at_buf.len();
+    let args_types_ptr = at_buf.as_mut_ptr();
+    let args_ptr = buf.as_mut_ptr();
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
