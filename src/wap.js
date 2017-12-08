@@ -17,6 +17,12 @@ const new_key = function () {
   return next++;
 }
 
+if (typeof TextDecoder !== "function") {
+  const util = require("util");
+  var TextDecoder = util.TextDecoder;
+  var TextEncoder = util.TextEncoder;
+}
+
 const js_string_from_rust_raw = function (mu8, ptr) {
   let end = ptr;
   while (mu8[end] !== 0) {
@@ -296,10 +302,23 @@ lib.wap = function (wasm_url, imports) {
   imports.env["wap_instanceof"] = wap_instanceof;
   imports.env["wap_delete"] = wap_delete;
 
-
-  fetch(wasm_url)
-    .then(response => response.arrayBuffer())
-    .then(bytes => WebAssembly.instantiate(bytes, imports))
+  let ab = undefined;
+  if (typeof fetch === "function") {
+    ab = fetch(wasm_url)
+      .then(response => response.arrayBuffer());
+  } else {
+    ab = new Promise((resolve, reject) => {
+      const fs = require('fs');
+      fs.readFile(wasm_url, (err, data) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(data);
+        }
+      });
+    });
+  }
+  ab.then(bytes => WebAssembly.instantiate(bytes, imports))
     .then(({ module, instance }) => {
       out.module = module;
       out.instance = instance;
@@ -313,7 +332,7 @@ lib.wap = function (wasm_url, imports) {
       instance.exports.wap_begin(inst, glob);
       out.status = "begun";
     })
-    .catch(function (reason) {
+    .catch((reason) => {
       out.status = "error";
       debug("promise err cought");
       debug(reason);
@@ -339,3 +358,9 @@ const g = function () {
 
 //todo make as real lib like Math
 g().Wap = Object.seal(lib);
+
+// simple node.js export
+// todo try Worker support
+if (typeof global === "object" && typeof exports === "object") {
+  exports.wap = lib.wap;
+}

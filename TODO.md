@@ -9,5 +9,4 @@ __grep -r todo *__
 * tests
 
 ### Maybies
-* nodejs support
 * Consider changing raw string from null terminated.

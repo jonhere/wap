@@ -31,6 +31,9 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * Open in firefox
 * Chrome requires webserver (e.g. python -m SimpleHTTPServer )
 
+#### node.js
+* node -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")'
+
 ## License
 Apache 2.0 and MIT.
 wap.js public domain
