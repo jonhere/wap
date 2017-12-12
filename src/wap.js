@@ -331,15 +331,15 @@ lib.wap = function (wasm_url, imports) {
       debug("instance " + inst);
       const glob = new_key();
       wap.set(glob, g());
-      debug("global (window) " + glob);
+      debug("global " + glob);
       out.status = "pre begin";
       instance.exports.wap_begin(inst, glob);
       out.status = "begun";
     })
     .catch((reason) => {
       out.status = "error";
-      debug("promise err cought");
-      debug(reason);
+      console.log("promise err cought:");
+      console.log(reason);
       if (typeof window == "object") {
         window.addEventListener("DOMContentLoaded", () =>
           window.document.body.innerHTML = "Script error. Check console for detail.");

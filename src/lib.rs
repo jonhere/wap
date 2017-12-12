@@ -123,6 +123,20 @@ impl WapWeak {
 }
 
 impl JsType {
+    pub fn is_null(&self) -> bool {
+        match self {
+            &JsType::Null => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_undefined(&self) -> bool {
+        match self {
+            &JsType::Undefined => true,
+            _ => false,
+        }
+    }
+
     pub fn unwrap(self) -> WapRc {
         match self {
             JsType::Ref(r) => r,

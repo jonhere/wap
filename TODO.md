@@ -6,4 +6,3 @@ __grep -r todo *__
 * maybe support throw
 * docs
 * examples
-* tests
