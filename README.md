@@ -1,5 +1,5 @@
 # wap
-Wap library allows you to write a web page app exclusively in Rust.
+Wap library allows you to write a web page (or node.js) app exclusively in Rust.
 All you need to start is the boilerplate wap.js and html configured with title and link to your .wasm file.
 
 Target is exclusively for Rusts wasm32-unknown-unknown. For cross-platform project probably better going with wasm32-unknown-emscripten.
