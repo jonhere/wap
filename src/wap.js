@@ -33,11 +33,12 @@ const js_string_from_rust_raw = function (mu8, ptr) {
   return td.decode(u8s);
 };
 
-const new_rust_raw_string = function (wap_alloc, mu8, js) {
+const new_rust_raw_string = function (wap_alloc, mem, js) {
   const te = new TextEncoder("UTF-8");
   const u8s = te.encode(js);
   const len = u8s.length;
   const ptr = wap_alloc(len + 1);
+  const mu8 = new Uint8Array(mem.buffer);
   mu8.set(u8s, ptr);
   mu8[ptr + len] = 0;
   return ptr;
@@ -52,7 +53,8 @@ const TYPE_REF = 5;
 
 const wap_get = function (instance_index, from_index, name_ptr, ret_ptr) {
   const instance = wap.get(instance_index);
-  const mb = instance.exports.memory.buffer;
+  const mem = instance.exports.memory;
+  const mb = mem.buffer;
   const mu8 = new Uint8Array(mb);
   const name = js_string_from_rust_raw(mu8, name_ptr);
   debug("i" + instance_index + " get " + from_index + "[" + name + "]");
@@ -83,8 +85,9 @@ const wap_get = function (instance_index, from_index, name_ptr, ret_ptr) {
 
   } else if (ret_type === "string") {
     debug("-> string " + ret);
-    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mu8, ret);
-    const mu32 = new Uint32Array(mb, ret_ptr, 1);
+    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mem, ret);
+    // note: mb and mu8 are now invalid, due to above call into wasm
+    const mu32 = new Uint32Array(mem.buffer, ret_ptr, 1);
     mu32[0] = ptr;
     return TYPE_STRING;
 
@@ -179,34 +182,39 @@ const set_ref = function (instance_index, object_index, name_ptr, index) {
 
 const obj_call = function (obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
   const instance = wap.get(instance_index);
-  const mb = instance.exports.memory.buffer;
-  const mu8 = new Uint8Array(mb);
-  const mf64 = new Float64Array(mb);
-  const mu32 = new Uint32Array(mb);
   const the_function = wap.get(index_of_function);
+  const mem = instance.exports.memory;
 
   let args = [];
-  for (let i = 0; i < num_args; i++) {
-    switch (mu8[at_ptr + i]) {
-      case TYPE_NULL:
-        args.push(null);
-        break;
-      case TYPE_UNDEFINED:
-        args.push(undefined);
-        break;
-      case TYPE_BOOLEAN:
-        args.push((mf64[args_ptr / 8 + i] === 0.0) ? false : true);
-        break;
-      case TYPE_NUMBER:
-        args.push(mf64[args_ptr / 8 + i]);
-        break;
-      case TYPE_STRING:
-        const s = js_string_from_rust_raw(mu8, mu32[args_ptr / 4 + i]);
-        args.push(s);
-        break;
-      case TYPE_REF:
-        args.push(wap.get(mf64[args_ptr / 8 + i]));
-        break;
+  {
+    // note: block is so; if the_function calls into wasm, below may become invalid.
+    const mb = mem.buffer;
+    const mu8 = new Uint8Array(mb);
+    const mf64 = new Float64Array(mb);
+    const mu32 = new Uint32Array(mb);
+
+    for (let i = 0; i < num_args; i++) {
+      switch (mu8[at_ptr + i]) {
+        case TYPE_NULL:
+          args.push(null);
+          break;
+        case TYPE_UNDEFINED:
+          args.push(undefined);
+          break;
+        case TYPE_BOOLEAN:
+          args.push((mf64[args_ptr / 8 + i] === 0.0) ? false : true);
+          break;
+        case TYPE_NUMBER:
+          args.push(mf64[args_ptr / 8 + i]);
+          break;
+        case TYPE_STRING:
+          const s = js_string_from_rust_raw(mu8, mu32[args_ptr / 4 + i]);
+          args.push(s);
+          break;
+        case TYPE_REF:
+          args.push(wap.get(mf64[args_ptr / 8 + i]));
+          break;
+      }
     }
   }
 
@@ -223,17 +231,20 @@ const obj_call = function (obj, instance_index, index_of_function, num_args, at_
 
   } else if (ret_type === "boolean") {
     debug("-> boolean " + ret);
+    const mf64 = new Float64Array(mem.buffer);
     mf64[ret_ptr / 8] = ret ? 1.0 : 0.0;
     return TYPE_BOOLEAN;
 
   } else if (ret_type === "number") {
     debug("-> number " + ret);
+    const mf64 = new Float64Array(mem.buffer);
     mf64[ret_ptr / 8] = ret;
     return TYPE_NUMBER;
 
   } else if (ret_type === "string") {
     debug("-> string " + ret);
-    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mu8, ret);
+    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mem, ret);
+    const mu32 = new Uint32Array(mem.buffer);
     mu32[ret_ptr / 4] = ptr;
     return TYPE_STRING;
 
@@ -241,6 +252,7 @@ const obj_call = function (obj, instance_index, index_of_function, num_args, at_
     const index = new_key();
     wap.set(index, ret);
     debug("-> ref " + index);
+    const mf64 = new Float64Array(mem.buffer);
     mf64[ret_ptr / 8] = index;
     return TYPE_REF;
   }
