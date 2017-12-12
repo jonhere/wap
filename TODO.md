@@ -7,6 +7,3 @@ __grep -r todo *__
 * docs
 * examples
 * tests
-
-### Maybies
-* Consider changing raw string from null terminated.

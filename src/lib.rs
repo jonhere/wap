@@ -2,29 +2,35 @@
 //!
 
 
-use std::mem;
-use std::ffi::CStr;
-use std::os::raw::c_char;
+use std::{mem, slice, str};
 use std::rc::{Rc, Weak};
 
 
 //https://github.com/brson/mir2wasm/issues/33
 //https://github.com/rust-lang/rust/issues/44006
 
-//#[link(name = "env")]
+#[link(name = "env")]
 extern "C" {
     //#[link_name="wap_get"]
-    fn wap_get(instance: f64, from: f64, name: *const u8, ret: *mut f64) -> u8;
+    fn wap_get(instance: f64, from: f64, name_ptr: *const u8, name_len: usize, ret: *mut f64)
+        -> u8;
     fn wap_clone(index: f64) -> f64;
     fn wap_unmap(index: f64);
-    fn wap_set_null(instance: f64, object: f64, name: *const u8);
-    fn wap_set_undefined(instance: f64, object: f64, name: *const u8);
-    fn wap_set_boolean(instance: f64, object: f64, name: *const u8, val: bool);
-    fn wap_set_number(instance: f64, object: f64, name: *const u8, val: f64);
-    fn wap_set_string(instance: f64, object: f64, name: *const u8, ptr: *const u8);
-    fn wap_set_ref(instance: f64, object: f64, name: *const u8, index: f64);
+    fn wap_set_null(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+    fn wap_set_undefined(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+    fn wap_set_boolean(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, val: bool);
+    fn wap_set_number(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, val: f64);
+    fn wap_set_string(
+        instance: f64,
+        object: f64,
+        name_ptr: *const u8,
+        name_len: usize,
+        val_ptr: *const u8,
+        val_len: usize,
+    );
+    fn wap_set_ref(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, index: f64);
     fn wap_new_object() -> f64;
-    fn wap_new_string(instance: f64, from: *const u8) -> f64;
+    fn wap_new_string(instance: f64, from_ptr: *const u8, from_len: usize) -> f64;
     fn wap_call(
         instance: f64,
         index_of_function: f64,
@@ -42,8 +48,8 @@ extern "C" {
         args: *const f64,
         ret: *mut f64,
     ) -> u8;
-    fn wap_instanceof(instance: f64, object: f64, of: *const u8) -> bool;
-    fn wap_delete(instance: f64, object: f64, name: *const u8);
+    fn wap_instanceof(instance: f64, object: f64, of_ptr: *const u8, of_len: usize) -> bool;
+    fn wap_delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
 //fn wap new_boolean
 //fn wap new_number
 //fn wap new_construct
@@ -144,25 +150,25 @@ impl JsType {
 }
 
 impl From<bool> for JsType {
-    fn from(b :bool) -> Self {
+    fn from(b: bool) -> Self {
         JsType::Boolean(b)
     }
 }
 
 impl From<f64> for JsType {
-    fn from(n :f64) -> Self {
+    fn from(n: f64) -> Self {
         JsType::Number(n)
     }
 }
 
 impl From<String> for JsType {
-    fn from(s :String) -> Self {
+    fn from(s: String) -> Self {
         JsType::String(s)
     }
 }
 
 impl From<WapRc> for JsType {
-    fn from(r :WapRc) -> Self {
+    fn from(r: WapRc) -> Self {
         JsType::Ref(r)
     }
 }
@@ -199,17 +205,15 @@ pub unsafe extern "C" fn wap_alloc(size: usize) -> *mut u8 {
     ptr
 }
 
-fn wap_dealloc(ptr: *mut u8, cap: usize) {
-    unsafe {
-        //FORGOTTEN_MEM -= cap as isize;
-        let _ = Vec::from_raw_parts(ptr, 0, cap);
-    }
+unsafe fn wap_dealloc(ptr: *mut u8, cap: usize) {
+    //FORGOTTEN_MEM -= cap as isize;
+    let _ = Vec::from_raw_parts(ptr, 0, cap);
 }
 
 pub fn get(from: &WapRc, name: &str) -> JsType {
     let mut v = name.to_string().into_bytes();
-    v.push(0);
     let name = v.as_mut_ptr();
+    let len = v.len();
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
@@ -217,6 +221,7 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
             raw_instance(),
             from.raw_index(),
             name,
+            len,
             &mut ret64 as *mut f64,
         ))
     };
@@ -227,12 +232,14 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
         RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
         RetTypes::Number => JsType::Number(ret64),
         RetTypes::String => {
-            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
-            let d = unsafe { CStr::from_ptr(str_ptr) };
-            let b = d.to_bytes();
-            let alloc_len = b.len() + 1;
-            let s = unsafe { String::from_utf8_unchecked(b.to_vec()) };
-            wap_dealloc(str_ptr as *mut u8, alloc_len);
+            let s = unsafe {
+                let ptr = *(&ret64 as *const f64 as *const *mut u8);
+                let len = *(&ret64 as *const f64 as *const usize).offset(1);
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = str::from_utf8_unchecked(slice).to_owned();
+                wap_dealloc(ptr, len);
+                s
+            };
             JsType::String(s)
         }
         RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
@@ -246,41 +253,41 @@ pub fn new_object() -> WapRc {
 
 pub fn new_string(text: &str) -> WapRc {
     let mut v = text.to_string().into_bytes();
-    v.push(0);
     let text = v.as_mut_ptr();
+    let len = v.len();
 
-    let index = unsafe { wap_new_string(raw_instance(), text) };
+    let index = unsafe { wap_new_string(raw_instance(), text, len) };
     WapRc::new(index)
 }
 
 pub fn set(object: &WapRc, name: &str, to: JsType) {
     let mut v = name.to_string().into_bytes();
-    v.push(0);
     let name = v.as_mut_ptr();
+    let len = v.len();
 
     match to {
         JsType::Null => unsafe {
-            wap_set_null(raw_instance(), object.raw_index(), name);
+            wap_set_null(raw_instance(), object.raw_index(), name, len);
         },
         JsType::Undefined => unsafe {
-            wap_set_undefined(raw_instance(), object.raw_index(), name);
+            wap_set_undefined(raw_instance(), object.raw_index(), name, len);
         },
         JsType::Boolean(b) => unsafe {
-            wap_set_boolean(raw_instance(), object.raw_index(), name, b);
+            wap_set_boolean(raw_instance(), object.raw_index(), name, len, b);
         },
         JsType::Number(n) => unsafe {
-            wap_set_number(raw_instance(), object.raw_index(), name, n);
+            wap_set_number(raw_instance(), object.raw_index(), name, len, n);
         },
         JsType::String(s) => {
             let mut v = s.to_string().into_bytes();
-            v.push(0);
             let s = v.as_mut_ptr();
+            let s_len = v.len();
             unsafe {
-                wap_set_string(raw_instance(), object.raw_index(), name, s);
+                wap_set_string(raw_instance(), object.raw_index(), name, len, s, s_len);
             }
         }
         JsType::Ref(r) => unsafe {
-            wap_set_ref(raw_instance(), object.raw_index(), name, r.raw_index());
+            wap_set_ref(raw_instance(), object.raw_index(), name, len, r.raw_index());
         },
     }
 }
@@ -288,28 +295,29 @@ pub fn set(object: &WapRc, name: &str, to: JsType) {
 
 pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
     let mut save = Vec::new();
-    let (mut at_buf, mut buf) = args.into_iter().map(|arg| {
-        match arg {
+    let (mut at_buf, mut buf) = args.into_iter()
+        .map(|arg| match arg {
             &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
-            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe { mem::uninitialized() }),
-            &JsType::Boolean(b) =>
-                (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
-            &JsType::Number(n) =>
-                (RetTypes::Number as u8, n),
+            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe {
+                mem::uninitialized()
+            }),
+            &JsType::Boolean(b) => (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
+            &JsType::Number(n) => (RetTypes::Number as u8, n),
             &JsType::String(ref s) => {
                 let mut v = s.clone().into_bytes();
-                v.push(0);
                 let p = v.as_ptr();
+                let len = v.len();
                 save.push(v);
                 let mut f = unsafe { mem::uninitialized() };
                 unsafe {
                     *(&mut f as *mut f64 as *mut *const u8) = p;
+                    *(&mut f as *mut f64 as *mut usize).offset(1) = len;
                 };
                 (RetTypes::String as u8, f)
             }
             &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
-        }
-    }).unzip::<_, _, Vec<u8>, Vec<f64>>();
+        })
+        .unzip::<_, _, Vec<u8>, Vec<f64>>();
     let num_args = at_buf.len();
     let args_types_ptr = at_buf.as_mut_ptr();
     let args_ptr = buf.as_mut_ptr();
@@ -332,12 +340,14 @@ pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
         RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
         RetTypes::Number => JsType::Number(ret64),
         RetTypes::String => {
-            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
-            let d = unsafe { CStr::from_ptr(str_ptr) };
-            let b = d.to_bytes();
-            let alloc_len = b.len() + 1;
-            let s = unsafe { String::from_utf8_unchecked(b.to_vec()) };
-            wap_dealloc(str_ptr as *mut u8, alloc_len);
+            let s = unsafe {
+                let ptr = *(&ret64 as *const f64 as *const *mut u8);
+                let len = *(&ret64 as *const f64 as *const usize).offset(1);
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = str::from_utf8_unchecked(slice).to_owned();
+                wap_dealloc(ptr, len);
+                s
+            };
             JsType::String(s)
         }
         RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
@@ -375,11 +385,12 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
             &JsType::String(ref s) => {
                 at_buf[i] = RetTypes::String as u8;
                 let mut v = s.clone().into_bytes();
-                v.push(0);
                 let p = v.as_ptr();
+                let len = v.len();
                 save.push(v);
                 unsafe {
                     *(&mut buf[i] as *mut f64 as *mut *const u8) = p;
+                    *(&mut buf[i] as *mut f64 as *mut usize).offset(1) = len;
                 }
             }
             &JsType::Ref(ref r) => {
@@ -408,12 +419,14 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
         RetTypes::Boolean => JsType::Boolean(ret64 != 0.0),
         RetTypes::Number => JsType::Number(ret64),
         RetTypes::String => {
-            let str_ptr = unsafe { *(&ret64 as *const f64 as *const *const c_char) };
-            let d = unsafe { CStr::from_ptr(str_ptr) };
-            let b = d.to_bytes();
-            let alloc_len = b.len() + 1;
-            let s = unsafe { String::from_utf8_unchecked(b.to_vec()) };
-            wap_dealloc(str_ptr as *mut u8, alloc_len);
+            let s = unsafe {
+                let ptr = *(&ret64 as *const f64 as *const *mut u8);
+                let len = *(&ret64 as *const f64 as *const usize).offset(1);
+                let slice = slice::from_raw_parts(ptr, len);
+                let s = str::from_utf8_unchecked(slice).to_owned();
+                wap_dealloc(ptr, len);
+                s
+            };
             JsType::String(s)
         }
         RetTypes::Ref => JsType::Ref(WapRc::new(ret64)),
@@ -422,19 +435,19 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
 
 pub fn instanceof(item: &WapRc, of: &str) -> bool {
     let mut v = of.to_string().into_bytes();
-    v.push(0);
     let of = v.as_mut_ptr();
+    let len = v.len();
 
-    unsafe { wap_instanceof(raw_instance(), item.raw_index(), of) }
+    unsafe { wap_instanceof(raw_instance(), item.raw_index(), of, len) }
 }
 
 pub fn delete(object: &WapRc, name: &str) {
     let mut v = name.to_string().into_bytes();
-    v.push(0);
     let name = v.as_mut_ptr();
+    let len = v.len();
 
     unsafe {
-        wap_delete(raw_instance(), object.raw_index(), name);
+        wap_delete(raw_instance(), object.raw_index(), name, len);
     }
 }
 

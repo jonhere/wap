@@ -23,25 +23,23 @@ if (typeof TextDecoder !== "function") {
   var TextEncoder = util.TextEncoder;
 }
 
-const js_string_from_rust_raw = function (mu8, ptr) {
-  let end = ptr;
-  while (mu8[end] !== 0) {
-    end++;
-  }
-  const u8s = mu8.subarray(ptr, end);
+const js_string_from_raw = function (mu8, ptr, len) {
+  const u8s = mu8.subarray(ptr, ptr + len);
   const td = new TextDecoder("UTF-8");
   return td.decode(u8s);
 };
 
-const new_rust_raw_string = function (wap_alloc, mem, js) {
+// this calls into wasm so invalidates existing memory.buffer
+// returns pointer and length wrapped in Uint32Array
+const new_pl_raw_string = function (wap_alloc, mem, js) {
   const te = new TextEncoder("UTF-8");
   const u8s = te.encode(js);
-  const len = u8s.length;
-  const ptr = wap_alloc(len + 1);
+  let pl = new Uint32Array(2);
+  pl[1] = u8s.length;
+  pl[0] = wap_alloc(pl[1]);
   const mu8 = new Uint8Array(mem.buffer);
-  mu8.set(u8s, ptr);
-  mu8[ptr + len] = 0;
-  return ptr;
+  mu8.set(u8s, pl[0]);
+  return pl;
 };
 
 const TYPE_NULL = 0;
@@ -51,12 +49,12 @@ const TYPE_NUMBER = 3;
 const TYPE_STRING = 4;
 const TYPE_REF = 5;
 
-const wap_get = function (instance_index, from_index, name_ptr, ret_ptr) {
+const wap_get = function (instance_index, from_index, name_ptr, name_len, ret_ptr) {
   const instance = wap.get(instance_index);
   const mem = instance.exports.memory;
   const mb = mem.buffer;
   const mu8 = new Uint8Array(mb);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   debug("i" + instance_index + " get " + from_index + "[" + name + "]");
   const from = wap.get(from_index);
 
@@ -85,10 +83,10 @@ const wap_get = function (instance_index, from_index, name_ptr, ret_ptr) {
 
   } else if (ret_type === "string") {
     debug("-> string " + ret);
-    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mem, ret);
+    const pl = new_pl_raw_string(instance.exports.wap_alloc, mem, ret);
     // note: mb and mu8 are now invalid, due to above call into wasm
-    const mu32 = new Uint32Array(mem.buffer, ret_ptr, 1);
-    mu32[0] = ptr;
+    const mu32 = new Uint32Array(mem.buffer, ret_ptr, 2);
+    mu32.set(pl);
     return TYPE_STRING;
 
   } else {
@@ -121,62 +119,62 @@ const new_object = function () {
   return index;
 };
 
-const new_string = function (instance_index, text_ptr) {
+const new_string = function (instance_index, text_ptr, text_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
-  const text = js_string_from_rust_raw(mu8, text_ptr);
+  const text = js_string_from_raw(mu8, text_ptr, text_len);
   const index = new_key();
   wap.set(index, text);
   debug("i" + instance_index + " new_string " + text + " " + index);
   return index;
 };
 
-const set_null = function (instance_index, object_index, name_ptr) {
+const set_null = function (instance_index, object_index, name_ptr, name_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   o[name] = null;
 };
 
-const set_undefined = function (instance_index, object_index, name_ptr) {
+const set_undefined = function (instance_index, object_index, name_ptr, name_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   o[name] = undefined;
 };
 
-const set_boolean = function (instance_index, object_index, name_ptr, val) {
+const set_boolean = function (instance_index, object_index, name_ptr, name_len, val) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   o[name] = val > 0 ? true : false;
 };
 
-const set_number = function (instance_index, object_index, name_ptr, val) {
+const set_number = function (instance_index, object_index, name_ptr, name_len, val) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   o[name] = val;
 };
 
-const set_string = function (instance_index, object_index, name_ptr, ptr) {
+const set_string = function (instance_index, object_index, name_ptr, name_len, val_ptr, val_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
-  const val = js_string_from_rust_raw(mu8, ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
+  const val = js_string_from_raw(mu8, val_ptr, val_len);
   o[name] = val;
 };
 
-const set_ref = function (instance_index, object_index, name_ptr, index) {
+const set_ref = function (instance_index, object_index, name_ptr, name_len, index) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const o = wap.get(object_index);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   o[name] = wap.get(index);
 };
 
@@ -208,7 +206,7 @@ const obj_call = function (obj, instance_index, index_of_function, num_args, at_
           args.push(mf64[args_ptr / 8 + i]);
           break;
         case TYPE_STRING:
-          const s = js_string_from_rust_raw(mu8, mu32[args_ptr / 4 + i]);
+          const s = js_string_from_raw(mu8, mu32[args_ptr / 4 + i], mu32[args_ptr / 4 + i + 1]);
           args.push(s);
           break;
         case TYPE_REF:
@@ -243,9 +241,9 @@ const obj_call = function (obj, instance_index, index_of_function, num_args, at_
 
   } else if (ret_type === "string") {
     debug("-> string " + ret);
-    const ptr = new_rust_raw_string(instance.exports.wap_alloc, mem, ret);
-    const mu32 = new Uint32Array(mem.buffer);
-    mu32[ret_ptr / 4] = ptr;
+    const pl = new_pl_raw_string(instance.exports.wap_alloc, mem, ret);
+    const mu32 = new Uint32Array(mem.buffer, ret_ptr, 2);
+    mu32.set(pl);
     return TYPE_STRING;
 
   } else {
@@ -269,20 +267,20 @@ const bound_call = function (instance_index, index_of_object, index_of_function,
   return obj_call(obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
 };
 
-const wap_instanceof = function (instance_index, index_of_object, of_ptr) {
+const wap_instanceof = function (instance_index, index_of_object, of_ptr, of_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
-  const type = js_string_from_rust_raw(mu8, of_ptr);
+  const type = js_string_from_raw(mu8, of_ptr, of_len);
   debug("i" + instance_index + " " + index_of_object + (eval("obj instanceof " + type) ? " instance of " : " NOT instance of ") + type);
   return eval("obj instanceof " + type);
 }
 
-const wap_delete = function (instance_index, index_of_object, name_ptr) {
+const wap_delete = function (instance_index, index_of_object, name_ptr, name_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
-  const name = js_string_from_rust_raw(mu8, name_ptr);
+  const name = js_string_from_raw(mu8, name_ptr, name_len);
   delete obj[name];
 }
 
