@@ -319,16 +319,10 @@ lib.wap = function (wasm_url, imports) {
     ab = fetch(wasm_url)
       .then(response => response.arrayBuffer());
   } else {
-    ab = new Promise((resolve, reject) => {
-      const fs = require('fs');
-      fs.readFile(wasm_url, (err, data) => {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
-      });
-    });
+    const fs = require('fs');
+    const util = require('util');
+    const readFile = util.promisify(fs.readFile);
+    ab = readFile(wasm_url);
   }
   ab.then(bytes => WebAssembly.instantiate(bytes, imports))
     .then(({ module, instance }) => {
