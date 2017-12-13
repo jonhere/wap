@@ -1,4 +1,5 @@
 // file copyright release to public domain
+'use strict';
 
 // note: ensure src calls comply with the simple stripping rule used in build.rs
 // i.e. "debug(" at start of line
@@ -295,6 +296,22 @@ lib.wap = function (wasm_url, imports) {
   if (typeof imports.env === "undefined") {
     imports.env = {};
   }
+
+  //https://github.com/rust-lang/rust/blob/560a5da9f1cc7f67d2fc372925aef18c96c82629/src/libstd/sys/wasm/cmath.rs#L77-L119
+  imports.env["Math_acos"] = Math.acos;
+  imports.env["Math_asin"] = Math.asin;
+  imports.env["Math_atan"] = Math.atan;
+  imports.env["Math_atan2"] = Math.atan2;
+  imports.env["Math_cbrt"] = Math.cbrt;
+  imports.env["Math_cosh"] = Math.cosh;
+  imports.env["Math_expm1"] = Math.expm1;
+  // todo find out what this is
+  //pub fn fdim(a: f64, b: f64) -> f64;
+  imports.env["Math_log1p"] = Math.log1p;
+  imports.env["Math_sinh"] = Math.sinh;
+  imports.env["Math_tan"] = Math.tan;
+  imports.env["Math_tanh"] = Math.tanh;
+  imports.env["Math_hypot"] = Math.hypot;
 
   imports.env["wap_get"] = wap_get;
   imports.env["wap_clone"] = clone;
