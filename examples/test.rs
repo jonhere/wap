@@ -5,7 +5,8 @@ use wap::*;
 use std::cell::RefCell;
 
 wap_begin!(|window| {
-    assert!(wap::instanceof(&window, "Window"));
+    let c_window = get(&window, "Window").unwrap();
+    assert!(wap::instanceof(&window, &c_window));
     let document = get(&window, "document").unwrap();
     let body = get(&document, "body").unwrap();
     let _s = new_string("hello");

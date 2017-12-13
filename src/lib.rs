@@ -48,12 +48,11 @@ extern "C" {
         args: *const f64,
         ret: *mut f64,
     ) -> u8;
-    fn wap_instanceof(instance: f64, object: f64, of_ptr: *const u8, of_len: usize) -> bool;
+    fn wap_instanceof(instance: f64, object: f64, constructor: f64) -> bool;
     fn wap_delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
 //fn wap new_boolean
 //fn wap new_number
 //fn wap new_construct
-//fn wap_member_instanceof(instance: f64, object: f64, name: *const u8, of: *const u8,) -> bool;
 //fn wap_typeof(object: f64) -> u8
 //fn wap_member_typeof(instance: f64, object: f64, name: *const u8) -> u8
 }
@@ -447,12 +446,8 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
     }
 }
 
-pub fn instanceof(item: &WapRc, of: &str) -> bool {
-    let mut v = of.to_string().into_bytes();
-    let of = v.as_mut_ptr();
-    let len = v.len();
-
-    unsafe { wap_instanceof(raw_instance(), item.raw_index(), of, len) }
+pub fn instanceof(item: &WapRc, constructor: &WapRc) -> bool {
+    unsafe { wap_instanceof(raw_instance(), item.raw_index(), constructor.raw_index()) }
 }
 
 pub fn delete(object: &WapRc, name: &str) {

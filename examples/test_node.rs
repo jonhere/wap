@@ -78,8 +78,10 @@ wap_begin!(|global| {
     );
     let _ = bound_call(&to, &myfn, &["aselfref".to_string().into()]).unwrap();
 
-    assert!(instanceof(&to, "Object"));
-    assert!(instanceof(&eval, "Function"));
+    let c_object = get(&global, "Object").unwrap();
+    let c_function = get(&global, "Function").unwrap();
+    assert!(instanceof(&to, &c_object));
+    assert!(instanceof(&eval, &c_function));
 
     delete(&to, "isanull");
     assert!(get(&to, "isanull").is_undefined());

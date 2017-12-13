@@ -268,13 +268,13 @@ const bound_call = function (instance_index, index_of_object, index_of_function,
   return obj_call(obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
 };
 
-const wap_instanceof = function (instance_index, index_of_object, of_ptr, of_len) {
+const wap_instanceof = function (instance_index, index_of_object, constructor_index) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
   const obj = wap.get(index_of_object);
-  const type = js_string_from_raw(mu8, of_ptr, of_len);
-  debug("i" + instance_index + " " + index_of_object + (eval("obj instanceof " + type) ? " instance of " : " NOT instance of ") + type);
-  return eval("obj instanceof " + type);
+  const type = wap.get(constructor_index);
+  debug("i" + instance_index + " " + index_of_object + ((obj instanceof type) ? " instance of " : " NOT instance of ") + constructor_index);
+  return obj instanceof type;
 }
 
 const wap_delete = function (instance_index, index_of_object, name_ptr, name_len) {
