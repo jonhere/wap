@@ -11,6 +11,20 @@ wap_begin!(|global| {
     let to = new_object();
     let _ = new_string("test string");
 
+    let c_object = get(&global, "Object").unwrap();
+    let _ = new_construct(&c_object, &[]);
+
+    let confn = call(
+        &eval,
+        &[
+            "let f = function(insout) { this.member = insout; }; f"
+                .to_string()
+                .into(),
+        ],
+    ).unwrap();
+    let cono = new_construct(&confn, &["testc".to_string().into()]);
+    assert_eq!(get(&cono, "member").unwrap_string(), "testc");
+
     set(&to, "isanull", JsType::Null);
     assert!(get(&to, "isanull").is_null());
     set(&to, "isundefined", JsType::Undefined);
@@ -78,7 +92,6 @@ wap_begin!(|global| {
     );
     let _ = bound_call(&to, &myfn, &["aselfref".to_string().into()]).unwrap();
 
-    let c_object = get(&global, "Object").unwrap();
     let c_function = get(&global, "Function").unwrap();
     assert!(instanceof(&to, &c_object));
     assert!(instanceof(&eval, &c_function));

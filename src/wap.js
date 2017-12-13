@@ -50,6 +50,39 @@ const TYPE_NUMBER = 3;
 const TYPE_STRING = 4;
 const TYPE_REF = 5;
 
+const get_args = function (mb, num_args, at_ptr, args_ptr) {
+  const mu8 = new Uint8Array(mb);
+  const mf64 = new Float64Array(mb);
+  const mu32 = new Uint32Array(mb);
+
+  let args = [];
+  for (let i = 0; i < num_args; i++) {
+    switch (mu8[at_ptr + i]) {
+      case TYPE_NULL:
+        args.push(null);
+        break;
+      case TYPE_UNDEFINED:
+        args.push(undefined);
+        break;
+      case TYPE_BOOLEAN:
+        args.push((mf64[args_ptr / 8 + i] === 0.0) ? false : true);
+        break;
+      case TYPE_NUMBER:
+        args.push(mf64[args_ptr / 8 + i]);
+        break;
+      case TYPE_STRING:
+        const s = js_string_from_raw(mu8, mu32[args_ptr / 4 + i], mu32[args_ptr / 4 + i + 1]);
+        args.push(s);
+        break;
+      case TYPE_REF:
+        args.push(wap.get(mf64[args_ptr / 8 + i]));
+        break;
+    }
+  }
+  return args;
+}
+
+
 const wap_get = function (instance_index, from_index, name_ptr, name_len, ret_ptr) {
   const instance = wap.get(instance_index);
   const mem = instance.exports.memory;
@@ -130,6 +163,19 @@ const new_string = function (instance_index, text_ptr, text_len) {
   return index;
 };
 
+const new_construct = function (instance_index, constructor_index, num_args, at_ptr, args_ptr) {
+  const instance = wap.get(instance_index);
+  const target = wap.get(constructor_index);
+  const args = get_args(instance.exports.memory.buffer, num_args, at_ptr, args_ptr);
+
+  const c = Reflect.construct(target, args);
+
+  const index = new_key();
+  wap.set(index, c);
+  debug("i" + instance_index + " new_construct " + text + " " + index);
+  return index;
+}
+
 const set_null = function (instance_index, object_index, name_ptr, name_len) {
   const instance = wap.get(instance_index);
   const mu8 = new Uint8Array(instance.exports.memory.buffer);
@@ -183,41 +229,9 @@ const obj_call = function (obj, instance_index, index_of_function, num_args, at_
   const instance = wap.get(instance_index);
   const the_function = wap.get(index_of_function);
   const mem = instance.exports.memory;
+  const args = get_args(mem.buffer, num_args, at_ptr, args_ptr);
 
-  let args = [];
-  {
-    // note: block is so; if the_function calls into wasm, below may become invalid.
-    const mb = mem.buffer;
-    const mu8 = new Uint8Array(mb);
-    const mf64 = new Float64Array(mb);
-    const mu32 = new Uint32Array(mb);
-
-    for (let i = 0; i < num_args; i++) {
-      switch (mu8[at_ptr + i]) {
-        case TYPE_NULL:
-          args.push(null);
-          break;
-        case TYPE_UNDEFINED:
-          args.push(undefined);
-          break;
-        case TYPE_BOOLEAN:
-          args.push((mf64[args_ptr / 8 + i] === 0.0) ? false : true);
-          break;
-        case TYPE_NUMBER:
-          args.push(mf64[args_ptr / 8 + i]);
-          break;
-        case TYPE_STRING:
-          const s = js_string_from_raw(mu8, mu32[args_ptr / 4 + i], mu32[args_ptr / 4 + i + 1]);
-          args.push(s);
-          break;
-        case TYPE_REF:
-          args.push(wap.get(mf64[args_ptr / 8 + i]));
-          break;
-      }
-    }
-  }
-
-  const ret = the_function.apply(obj, args);
+  const ret = Reflect.apply(the_function, obj, args);
 
   if (ret === null) {
     debug("-> null");
@@ -318,6 +332,7 @@ lib.wap = function (wasm_url, imports) {
   imports.env["wap_unmap"] = unmap;
   imports.env["wap_new_object"] = new_object;
   imports.env["wap_new_string"] = new_string;
+  imports.env["wap_new_construct"] = new_construct;
   imports.env["wap_set_null"] = set_null;
   imports.env["wap_set_undefined"] = set_undefined;
   imports.env["wap_set_boolean"] = set_boolean;

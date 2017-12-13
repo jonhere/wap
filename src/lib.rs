@@ -31,6 +31,13 @@ extern "C" {
     fn wap_set_ref(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, index: f64);
     fn wap_new_object() -> f64;
     fn wap_new_string(instance: f64, from_ptr: *const u8, from_len: usize) -> f64;
+    fn wap_new_construct(
+        instance: f64,
+        constructor_index: f64,
+        num_args: u32,
+        args_types: *const u8,
+        args: *const f64,
+    ) -> f64;
     fn wap_call(
         instance: f64,
         index_of_function: f64,
@@ -52,7 +59,6 @@ extern "C" {
     fn wap_delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
 //fn wap new_boolean
 //fn wap new_number
-//fn wap new_construct
 //fn wap_typeof(object: f64) -> u8
 //fn wap_member_typeof(instance: f64, object: f64, name: *const u8) -> u8
 }
@@ -273,6 +279,67 @@ pub fn new_string(text: &str) -> WapRc {
     WapRc::new(index)
 }
 
+fn raw_args(
+    args: &[JsType],
+) -> (
+    (Vec<Vec<u8>>, Vec<u8>, Vec<f64>),
+    u32,
+    *const u8,
+    *const f64,
+) {
+    let mut persist_string_bytes = Vec::new();
+    let (at_buf, buf) = args.into_iter()
+        .map(|arg| match arg {
+            &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
+            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe {
+                mem::uninitialized()
+            }),
+            &JsType::Boolean(b) => (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
+            &JsType::Number(n) => (RetTypes::Number as u8, n),
+            &JsType::String(ref s) => {
+                let mut v = s.clone().into_bytes();
+                let p = v.as_ptr();
+                let len = v.len();
+                persist_string_bytes.push(v);
+                let mut f = unsafe { mem::uninitialized() };
+                unsafe {
+                    *(&mut f as *mut f64 as *mut *const u8) = p;
+                    *(&mut f as *mut f64 as *mut usize).offset(1) = len;
+                };
+                (RetTypes::String as u8, f)
+            }
+            &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
+        })
+        .unzip::<_, _, Vec<u8>, Vec<f64>>();
+
+
+    let num_args = at_buf.len() as u32;
+    let args_types_ptr = at_buf.as_ptr();
+    let args_ptr = buf.as_ptr();
+
+    (
+        (persist_string_bytes, at_buf, buf),
+        num_args,
+        args_types_ptr,
+        args_ptr,
+    )
+}
+
+pub fn new_construct(constructor: &WapRc, args: &[JsType]) -> WapRc {
+    let (_persist, num_args, args_types_ptr, args_ptr) = raw_args(args);
+
+    let index = unsafe {
+        wap_new_construct(
+            raw_instance(),
+            constructor.raw_index(),
+            num_args,
+            args_types_ptr,
+            args_ptr,
+        )
+    };
+    WapRc::new(index)
+}
+
 pub fn set(object: &WapRc, name: &str, to: JsType) {
     let mut v = name.to_string().into_bytes();
     let name = v.as_mut_ptr();
@@ -305,42 +372,15 @@ pub fn set(object: &WapRc, name: &str, to: JsType) {
     }
 }
 
-
 pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
-    let mut save = Vec::new();
-    let (mut at_buf, mut buf) = args.into_iter()
-        .map(|arg| match arg {
-            &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
-            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe {
-                mem::uninitialized()
-            }),
-            &JsType::Boolean(b) => (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
-            &JsType::Number(n) => (RetTypes::Number as u8, n),
-            &JsType::String(ref s) => {
-                let mut v = s.clone().into_bytes();
-                let p = v.as_ptr();
-                let len = v.len();
-                save.push(v);
-                let mut f = unsafe { mem::uninitialized() };
-                unsafe {
-                    *(&mut f as *mut f64 as *mut *const u8) = p;
-                    *(&mut f as *mut f64 as *mut usize).offset(1) = len;
-                };
-                (RetTypes::String as u8, f)
-            }
-            &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
-        })
-        .unzip::<_, _, Vec<u8>, Vec<f64>>();
-    let num_args = at_buf.len();
-    let args_types_ptr = at_buf.as_mut_ptr();
-    let args_ptr = buf.as_mut_ptr();
+    let (_persist, num_args, args_types_ptr, args_ptr) = raw_args(args);
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
         mem::transmute(wap_call(
             raw_instance(),
             function.raw_index(),
-            num_args as u32,
+            num_args,
             args_types_ptr,
             args_ptr,
             &mut ret64 as *mut f64,
@@ -369,49 +409,7 @@ pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
 
 // almost identical code copy of call()
 pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
-    let num_args = args.len();
-
-    let mut at_buf = vec![unsafe { mem::uninitialized() }; num_args];
-    let args_types_ptr = at_buf.as_mut_ptr();
-
-    let mut buf = vec![unsafe { mem::uninitialized() }; num_args];
-    let args_ptr = buf.as_mut_ptr();
-
-    let mut save = Vec::new();
-
-    for (i, arg) in args.iter().enumerate() {
-        match arg {
-            &JsType::Null => {
-                at_buf[i] = RetTypes::Null as u8;
-            }
-            &JsType::Undefined => {
-                at_buf[i] = RetTypes::Undefined as u8;
-            }
-            &JsType::Boolean(b) => {
-                at_buf[i] = RetTypes::Boolean as u8;
-                buf[i] = if b { 1.0 } else { 0.0 };
-            }
-            &JsType::Number(n) => {
-                at_buf[i] = RetTypes::Number as u8;
-                buf[i] = n;
-            }
-            &JsType::String(ref s) => {
-                at_buf[i] = RetTypes::String as u8;
-                let mut v = s.clone().into_bytes();
-                let p = v.as_ptr();
-                let len = v.len();
-                save.push(v);
-                unsafe {
-                    *(&mut buf[i] as *mut f64 as *mut *const u8) = p;
-                    *(&mut buf[i] as *mut f64 as *mut usize).offset(1) = len;
-                }
-            }
-            &JsType::Ref(ref r) => {
-                at_buf[i] = RetTypes::Ref as u8;
-                buf[i] = r.raw_index();
-            }
-        }
-    }
+    let (_persist, num_args, args_types_ptr, args_ptr) = raw_args(args);
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
