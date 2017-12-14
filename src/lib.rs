@@ -57,6 +57,7 @@ extern "C" {
     ) -> u8;
     fn wap_instanceof(instance: f64, object: f64, constructor: f64) -> bool;
     fn wap_delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+    fn wap_eq(first: f64, second: f64) -> bool;
 //fn wap new_boolean
 //fn wap new_number
 //fn wap_typeof(object: f64) -> u8
@@ -66,18 +67,19 @@ extern "C" {
 // todo see if better as thread_local
 static mut INSTANCE: f64 = 0.0;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Index(f64);
 
 /// Rc reference count to JavaScripts exclusive types; which get references stored internally and dropped when finished with WapRc.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct WapRc(Rc<Index>);
 
 /// Weak companion to WapRc
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct WapWeak(Weak<Index>);
 
 /// The main data communication type in and out of function calls.
+#[derive(Debug, Clone)]
 pub enum JsType {
     Null,
     Undefined,
@@ -115,6 +117,15 @@ impl WapRc {
     }
     fn raw_index(&self) -> f64 {
         (*self.0).0
+    }
+}
+
+impl std::cmp::PartialEq for WapRc {
+    fn eq(&self, other: &Self) -> bool {
+        if self.raw_index() == other.raw_index() {
+            return true;
+        }
+        unsafe { wap_eq(self.raw_index(), other.raw_index()) }
     }
 }
 

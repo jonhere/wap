@@ -7,9 +7,9 @@ wap_begin!(|global| {
     let log = wap::get(&console, "log").unwrap();
     let eval = wap::get(&global, "eval").unwrap();
 
-    let _ = webassembly_instance();
+    let wai = webassembly_instance();
     let to = new_object();
-    let _ = new_string("test string");
+    let test_str = new_string("test string");
 
     let c_object = get(&global, "Object").unwrap();
     let _ = new_construct(&c_object, &[]);
@@ -98,6 +98,11 @@ wap_begin!(|global| {
 
     delete(&to, "isanull");
     assert!(get(&to, "isanull").is_undefined());
+
+    assert_eq!(&wai, &webassembly_instance());
+    assert_ne!(&wai, &to);
+    assert_eq!(&test_str, &test_str.clone());
+    assert_ne!(&test_str, &c_function);
 
     wap::call(
         &log,

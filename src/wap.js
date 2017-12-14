@@ -299,6 +299,12 @@ const wap_delete = function (instance_index, index_of_object, name_ptr, name_len
   delete obj[name];
 }
 
+const eq = function (first_index, second_index) {
+  const first = wap.get(first_index);
+  const second = wap.get(second_index);
+  return first === second;
+}
+
 let lib = {};
 lib.wap = function (wasm_url, imports) {
   const out = {};
@@ -343,6 +349,7 @@ lib.wap = function (wasm_url, imports) {
   imports.env["wap_bound_call"] = bound_call;
   imports.env["wap_instanceof"] = wap_instanceof;
   imports.env["wap_delete"] = wap_delete;
+  imports.env["wap_eq"] = eq;
 
   let ab = undefined;
   if (typeof fetch === "function") {
