@@ -1,4 +1,4 @@
-//! Wap library allows you to write a web page app exclusively in Rust.
+//! Wap library allows you to write a web page (or node.js) app exclusively in Rust.
 //!
 
 

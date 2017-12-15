@@ -1,0 +1,29 @@
+language: rust
+rust:
+ - nightly
+env:
+ - NODE_VER="--lts"
+before_install:
+ - nvm install $NODE_VER
+ - nvm run $NODE_VER --version
+ - cargo --version
+ - rustc --version
+install:
+ - rustup target add wasm32-unknown-unknown
+script:
+ - cargo build --verbose; cargo test --verbose
+ - cargo build --verbose --release --examples
+ - (
+    OUT=$(nvm run $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")')
+    R=$?
+    echo $OUT
+    if [ $R -ne 0 ];then exit $R; fi;
+    [ "$OUT" = "Hello World" ]
+   )
+ - (
+    OUT=$(nvm run $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/test_node.wasm")')
+    R=$?
+    echo $OUT
+    if [ $R -ne 0 ];then exit $R; fi;
+    [ "$OUT" = "Tests Complete. (Finally shutdown)" ]
+   )

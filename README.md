@@ -1,4 +1,6 @@
 # wap
+[![Build Status](https://travis-ci.org/jonhere/wap.svg?branch=master)](https://travis-ci.org/jonhere/wap)
+
 Wap library allows you to write a web page (or node.js) app exclusively in Rust.
 All you need to start is the boilerplate wap.js and html configured with title and link to your .wasm file.
 
@@ -29,7 +31,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * - target = "wasm32-unknown-unknown"
 * rustup run nightly cargo build --release
 * Open in firefox
-* Chrome requires webserver (e.g. python -m SimpleHTTPServer )
+* Chrome requires webserver (e.g. cargo install simple-http-server )
 
 #### node.js
 * node -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")'
