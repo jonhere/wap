@@ -4,24 +4,22 @@ rust:
 env:
  - NODE_VER="--lts"
 before_install:
- - nvm install $NODE_VER
- - nvm run $NODE_VER --version
- - cargo --version
- - rustc --version
+  # google search says travis nvm is old and buggy
+  - rm -rf ~/.nvm && git clone https://github.com/creationix/nvm.git ~/.nvm && (cd ~/.nvm && git checkout `git describe --abbrev=0 --tags`) && source ~/.nvm/nvm.sh && nvm install $NODE_VER
 install:
  - rustup target add wasm32-unknown-unknown
 script:
  - cargo build --verbose; cargo test --verbose
  - cargo build --verbose --release --examples
  - (
-    OUT=$(nvm run $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")')
+    OUT=$(nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")')
     R=$?
     echo $OUT
     if [ $R -ne 0 ];then exit $R; fi;
     [ "$OUT" = "Hello World" ]
    )
  - (
-    OUT=$(nvm run $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/test_node.wasm")')
+    OUT=$(nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/test_node.wasm")')
     R=$?
     echo $OUT
     if [ $R -ne 0 ];then exit $R; fi;
