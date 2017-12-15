@@ -9,19 +9,25 @@ before_install:
 install:
  - rustup target add wasm32-unknown-unknown
 script:
- - cargo build --verbose; cargo test --verbose
+ - cargo build --verbose
+ #; cargo test --verbose
+ # no cargo test for wasm
  - cargo build --verbose --release --examples
  - (
-    OUT=$(nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")')
-    R=$?
-    echo $OUT
+    nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")' > out;
+    R=$?;
+    cat out;
+    OUT=$(cat out);
+    rm out;
     if [ $R -ne 0 ];then exit $R; fi;
-    [ "$OUT" = "Hello World" ]
+    test "$OUT" = "Hello World"
    )
  - (
-    OUT=$(nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/test_node.wasm")')
-    R=$?
-    echo $OUT
+    nvm run --silent $NODE_VER -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/test_node.wasm")' > out;
+    R=$?;
+    cat out;
+    OUT=$(cat out);
+    rm out;
     if [ $R -ne 0 ];then exit $R; fi;
-    [ "$OUT" = "Tests Complete. (Finally shutdown)" ]
+    test "$OUT" = "Tests Complete. (Finally shutdown)"
    )
