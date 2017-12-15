@@ -1,25 +1,26 @@
 environment:
   nodejs_version: "lts"
-  RUSTUP_USE_HYPER: 1
+  RUSTUP_USE_REQWEST: 1
   CARGO_HTTP_CHECK_REVOKE: false
-  matrix:
-  - TARGET: wasm32-unknown-unknown
 install:
   - ps: Install-Product node $env:nodejs_version
   - appveyor-retry appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
-  - rustup-init.exe -y --default-host %TARGET%
+  - rustup-init.exe -y
   - set PATH=%PATH%;C:\Users\appveyor\.cargo\bin
+  - rustup toolchain install nightly
+  - rustup default nightly
+  - rustup target add wasm32-unknown-unknown
   - rustc -V
   - cargo -V
-  - node --version
+  - node -v
 
 build: false
 
 test_script:
-  - cargo build --verbose --target %TARGET%
-  - cargo build --verbose --release --examples --target %TARGET%
+  - cargo build --verbose
+  - cargo build --verbose --release --examples
   - ps: |
-      node -e 'require(".\target\wasm32-unknown-unknown\release\wap.js").wap("target\wasm32-unknown-unknown\release\examples\hello_node.wasm")' > out.txt
+      node -e "require('./target/wasm32-unknown-unknown/release/wap.js').wap('target/wasm32-unknown-unknown/release/examples/hello_node.wasm')" > out.txt
       $R = $LastExitCode
       Get-Content out.txt
       $OUT = Get-Content out.txt
@@ -27,10 +28,10 @@ test_script:
       if ($R -ne 0) { $host.SetShouldExit($R)  }
       if ($OUT -ne [array]"Hello World") { $host.SetShouldExit(1) }
   - ps: |
-      node -e 'require(".\target\wasm32-unknown-unknown\release\wap.js").wap("target\wasm32-unknown-unknown\release\examples\test_node.wasm")' > out.txt
+      node -e "require('./target/wasm32-unknown-unknown/release/wap.js').wap('target/wasm32-unknown-unknown/release/examples/test_node.wasm')" > out.txt
       $R = $LastExitCode
       Get-Content out.txt
       $OUT = Get-Content out.txt
       Remove-Item –path out.txt
       if ($R -ne 0) { $host.SetShouldExit($R)  }
-      if ($OUT -ne [array]"Hello World") { $host.SetShouldExit(1) }
+      if ($OUT -ne [array]"Tests Complete. (Finally shutdown)") { $host.SetShouldExit(1) }
