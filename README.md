@@ -1,5 +1,6 @@
 # wap
 [![Build Status](https://travis-ci.org/jonhere/wap.svg?branch=master)](https://travis-ci.org/jonhere/wap)
+[![Build status](https://ci.appveyor.com/api/projects/status/github/jonhere/wap?svg=true)](https://ci.appveyor.com/project/jonhere/wap)
 
 Wap library allows you to write a web page (or node.js) app exclusively in Rust.
 All you need to start is the boilerplate wap.js and html configured with title and link to your .wasm file.
