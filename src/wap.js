@@ -16,6 +16,8 @@
   let next = 1;
   const new_key = function () {
     // breaks at f64 at 2^53
+    // since values are never number could switch code to more complex reusage of keys
+    // storing the max and with next pointing chain of any freed key/values
     return next++;
   }
 
@@ -326,8 +328,9 @@
     imports.env["Math_cbrt"] = Math.cbrt;
     imports.env["Math_cosh"] = Math.cosh;
     imports.env["Math_expm1"] = Math.expm1;
-    // todo find out what this is
-    //pub fn fdim(a: f64, b: f64) -> f64;
+    imports.env["fdim"] = function (a, b) { return Math.max(a - b, 0.0); };
+    //fmod not listed but required
+    imports.env["fmod"] = function (a, b) { return a % b; };
     imports.env["Math_log1p"] = Math.log1p;
     imports.env["Math_sinh"] = Math.sinh;
     imports.env["Math_tan"] = Math.tan;
