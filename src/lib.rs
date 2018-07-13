@@ -230,6 +230,7 @@ pub unsafe fn shutdown() {
 /// Not to be called directly.
 /// Used by js boilerplate.
 #[no_mangle]
+#[doc(hidden)]
 pub unsafe extern "C" fn wap_alloc(size: usize) -> *mut u8 {
     //unsafe { FORGOTTEN_MEM += size as isize };
     let mut buf = Vec::with_capacity(size);
@@ -238,6 +239,7 @@ pub unsafe extern "C" fn wap_alloc(size: usize) -> *mut u8 {
     ptr
 }
 
+#[doc(hidden)]
 unsafe fn wap_dealloc(ptr: *mut u8, cap: usize) {
     //FORGOTTEN_MEM -= cap as isize;
     let _ = Vec::from_raw_parts(ptr, 0, cap);
@@ -474,6 +476,7 @@ pub fn delete(object: &WapRc, name: &str) {
 
 /// Not to be called directly.
 /// Used by wap_begin macro.
+#[doc(hidden)]
 pub unsafe fn wap_begin_init(instance: f64, global: f64) -> WapRc {
     INSTANCE = instance;
     WapRc::new(global)
