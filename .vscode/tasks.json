@@ -6,11 +6,8 @@
         {
             "type": "shell",
             "taskName": "cargo build examples",
-            "command": "rustup",
+            "command": "cargo",
             "args": [
-                "run",
-                "nightly",
-                "cargo",
                 "build",
                 "--examples"
             ],

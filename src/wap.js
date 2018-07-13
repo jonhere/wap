@@ -329,13 +329,17 @@
     imports.env["Math_cosh"] = Math.cosh;
     imports.env["Math_expm1"] = Math.expm1;
     imports.env["fdim"] = function (a, b) { return Math.max(a - b, 0.0); };
-    //fmod not listed but required
-    imports.env["fmod"] = function (a, b) { return a % b; };
     imports.env["Math_log1p"] = Math.log1p;
     imports.env["Math_sinh"] = Math.sinh;
     imports.env["Math_tan"] = Math.tan;
     imports.env["Math_tanh"] = Math.tanh;
     imports.env["Math_hypot"] = Math.hypot;
+
+    imports.env["fmod"] = function (a, b) { return a % b; };
+    imports.env["cosf"] = Math.cos;
+    imports.env["cos"] = Math.cos;
+    imports.env["sinf"] = Math.sin;
+    imports.env["sin"] = Math.sin;
 
     imports.env["wap_get"] = wap_get;
     imports.env["wap_clone"] = clone;

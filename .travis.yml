@@ -1,6 +1,12 @@
 language: rust
 rust:
- - nightly
+  - stable
+  - beta
+  - nightly
+matrix:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
 env:
  - NODE_VER="--lts"
 before_install:

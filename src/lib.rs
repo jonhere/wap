@@ -9,7 +9,10 @@ use std::rc::{Rc, Weak};
 //https://github.com/brson/mir2wasm/issues/33
 //https://github.com/rust-lang/rust/issues/44006
 
-#[link(name = "env")]
+// see if this progresses https://github.com/rust-lang/rust/commit/6741e416feb54b18de41c348ecc70ba5cbc961ce
+
+//#[link(name = "env")] // error linking
+// check status for update https://github.com/rust-lang/rust/issues/52090
 extern "C" {
     //#[link_name="wap_get"]
     fn wap_get(instance: f64, from: f64, name_ptr: *const u8, name_len: usize, ret: *mut f64)

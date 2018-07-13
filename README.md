@@ -18,7 +18,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * You can always call eval.
 
 ## Usage
-* rustup target add wasm32-unknown-unknown --toolchain nightly
+* rustup target add wasm32-unknown-unknown
 * cargo new --bin NAME
 * edit Cargo.toml
 * - [dependencies]
@@ -30,7 +30,7 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * add .cargo/config
 * - [build]
 * - target = "wasm32-unknown-unknown"
-* rustup run nightly cargo build --release
+* cargo build --release
 * Open in firefox
 * Chrome requires webserver (e.g. cargo install simple-http-server )
 
@@ -38,5 +38,5 @@ Wap functions give the wasm low level calls into JavaScript environment. It does
 * node -e 'require("./target/wasm32-unknown-unknown/release/wap.js").wap("target/wasm32-unknown-unknown/release/examples/hello_node.wasm")'
 
 ## License
-Apache 2.0 and MIT.
+Apache 2.0 or MIT.
 wap.js public domain
