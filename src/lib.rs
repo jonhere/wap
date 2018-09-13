@@ -4,10 +4,8 @@
 use std::rc::{Rc, Weak};
 use std::{mem, slice, str};
 
-//https://github.com/brson/mir2wasm/issues/33
-//https://github.com/rust-lang/rust/issues/44006
-
 // see if this progresses https://github.com/rust-lang/rust/commit/6741e416feb54b18de41c348ecc70ba5cbc961ce
+// or internal #![feature(set_stdio)]
 
 mod wap_imp {
     #[link(wasm_import_module = "WapImp")]
@@ -124,6 +122,50 @@ enum RetTypes {
     Number = 3,
     String = 4,
     Ref = 5,
+}
+
+/// Prettier interface to the functions
+#[macro_export]
+macro_rules! w {
+    ({}) => {
+        $crate::new_object()
+    };
+    (string $s:expr ) => {
+        $crate::new_string($s.as_ref())
+    };
+    (new $f:ident( $( $a:expr ),*  )) => {
+        $crate::new_construct(&$f, &[
+            $(
+                $a.into(),
+            )*
+        ])
+    };
+    ($o:ident.$f:ident( $( $a:expr ),* )) => {
+        $crate::bound_call(&$o, &$f, &[
+            $(
+                $a.into(),
+            )*
+        ])
+    };
+    ($f:ident( $( $a:expr ),* )) => {
+        $crate::call(&$f, &[
+            $(
+                $a.into(),
+            )*
+        ])
+    };
+    ($o:ident instanceof $f:ident) => {
+        $crate::instanceof(&$o, &$f)
+    };
+    (delete $o:ident[$n:tt]) => {
+        $crate::delete(&$o, $n.as_ref())
+    };
+    ($o:ident[$n:tt] = $v:expr ) => {
+        $crate::set(&$o, $n.as_ref(), $v.into())
+    };
+    ($o:ident[$n:tt]) => {
+        $crate::get(&$o, $n.as_ref())
+    };
 }
 
 impl Drop for Index {

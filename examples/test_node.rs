@@ -3,17 +3,24 @@ extern crate wap;
 use wap::*;
 
 wap_begin!(|global| {
-    let console = wap::get(&global, "console").unwrap();
-    let log = wap::get(&console, "log").unwrap();
-    let eval = wap::get(&global, "eval").unwrap();
+    //let console = wap::get(&global, "console").unwrap();
+    let console = w!(global["console"]).unwrap();
+    //let log = wap::get(&console, "log").unwrap();
+    let log = w!(console["log"]).unwrap();
+    //let eval = wap::get(&global, "eval").unwrap();
+    let eval = w!(global["eval"]).unwrap();
 
     let wai = webassembly_instance();
-    let to = new_object();
-    let test_str = new_string("test string");
+    //let to = new_object();
+    let to = w!({});
+    //let test_str = new_string("test string");
+    let test_str = w!(string "test string");
 
-    let c_object = get(&global, "Object").unwrap();
-    let _ = new_construct(&c_object, &[]);
-
+    //let c_object = get(&global, "Object").unwrap();
+    let c_object = w!(global["Object"]).unwrap();
+    //let _ = new_construct(&c_object, &[]);
+    let _ = w!(new c_object());
+    /*
     let confn = call(
         &eval,
         &[
@@ -22,11 +29,21 @@ wap_begin!(|global| {
                 .into(),
         ],
     ).unwrap();
-    let cono = new_construct(&confn, &["testc".to_string().into()]);
-    assert_eq!(get(&cono, "member").unwrap_string(), "testc");
+    */
+    let confn = w!(eval(
+        "let f = function(insout) { this.member = insout; }; f".to_string()
+    )).unwrap();
 
-    set(&to, "isanull", JsType::Null);
-    assert!(get(&to, "isanull").is_null());
+    //let cono = new_construct(&confn, &["testc".to_string().into()]);
+    let cono = w!(new confn("testc".to_string()));
+    //assert_eq!(get(&cono, "member").unwrap_string(), "testc");
+    assert_eq!(w!(cono["member"]).unwrap_string(), "testc");
+
+    //set(&to, "isanull", JsType::Null);
+    w!(to["isanull"] = JsType::Null);
+    //assert!(get(&to, "isanull").is_null());
+    assert!(w!(to["isanull"]).is_null());
+    //todo decide is want to use macro
     set(&to, "isundefined", JsType::Undefined);
     assert!(get(&to, "isundefined").is_undefined());
     set(&to, "abool", true.into());
@@ -42,11 +59,9 @@ wap_begin!(|global| {
 
     let myfn = call(
         &eval,
-        &[
-            "let f = function(insout) { return insout; }; f"
-                .to_string()
-                .into(),
-        ],
+        &["let f = function(insout) { return insout; }; f"
+            .to_string()
+            .into()],
     ).unwrap();
 
     assert!(call(&myfn, &[JsType::Null]).is_null());
@@ -62,21 +77,17 @@ wap_begin!(|global| {
 
     let myfn = call(
         &eval,
-        &[
-            "let f = function(a1,a2,insout) { return insout; }; f"
-                .to_string()
-                .into(),
-        ],
+        &["let f = function(a1,a2,insout) { return insout; }; f"
+            .to_string()
+            .into()],
     ).unwrap();
     assert!(call(&myfn, &["".to_string().into(), 43.0.into(), JsType::Null]).is_null());
 
     let myfn = call(
         &eval,
-        &[
-            "let f = function(item) { return this[item]; }; f"
-                .to_string()
-                .into(),
-        ],
+        &["let f = function(item) { return this[item]; }; f"
+            .to_string()
+            .into()],
     ).unwrap();
 
     assert!(bound_call(&to, &myfn, &["isanull".to_string().into()]).is_null());

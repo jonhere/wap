@@ -1,16 +1,19 @@
 #[macro_use]
 extern crate wap;
 
-use wap::*;
 use std::cell::RefCell;
+use wap::*;
 
 wap_begin!(|window| {
     let c_window = get(&window, "Window").unwrap();
     assert!(wap::instanceof(&window, &c_window));
+    assert!(w!(window instanceof c_window));
     let document = get(&window, "document").unwrap();
     let body = get(&document, "body").unwrap();
     let _s = new_string("hello");
     let _o = new_object();
+    let wo = w!({});
+    let _wo2 = w!(new wo());
     set(
         &body,
         "innerHTML",
@@ -20,18 +23,21 @@ wap_begin!(|window| {
 
     set(&window, "test", JsType::Boolean(true));
     delete(&window, "test");
+    w!(window["test"] = true);
+    w!(delete window["test"]);
 
     let eval = get(&window, "eval").unwrap();
+    let _eval2 = w!(window["eval"]).unwrap();
     let random = call(&eval, &["Math.random".to_string().into()]).unwrap();
+    let _random2 = w!(window.random());
+    let _random2 = w!(random());
     let random = call(&random, &[]).unwrap_number();
     call(
         &eval,
-        &[
-            format!(
-                "alert(\"Eval called.\\nOk to begin RAF loop\\n{}\");",
-                random
-            ).into(),
-        ],
+        &[format!(
+            "alert(\"Eval called.\\nOk to begin RAF loop\\n{}\");",
+            random
+        ).into()],
     );
 
     let instance = webassembly_instance();
@@ -93,8 +99,13 @@ pub extern "C" fn fn_loop(time: f64) {
             s.body.as_ref().unwrap(),
             "innerText",
             JsType::String(
-                "Hello World ".to_string() + &format!("{:.3}", s.start) + " " + &s.count.to_string()
-                    + " " + &format!("{:.3}", time) + " "
+                "Hello World ".to_string()
+                    + &format!("{:.3}", s.start)
+                    + " "
+                    + &s.count.to_string()
+                    + " "
+                    + &format!("{:.3}", time)
+                    + " "
                     + &format!("{:.3}", (time - last)),
             ),
         );
