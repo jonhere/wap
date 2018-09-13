@@ -21,23 +21,40 @@
     return next++;
   }
 
-  if (typeof TextDecoder !== "function") {
-    const util = require("util");
-    var TextDecoder = util.TextDecoder;
-    var TextEncoder = util.TextEncoder;
+
+  function get_text_decoder() {
+    if (typeof TextDecoder == "function") {
+      return new TextDecoder("UTF-8");
+    } else {
+      const util = require("util");
+      const TextDecoder = util.TextDecoder;
+      return new TextDecoder("UTF-8");
+    }
   }
+
+  const textDecoder = get_text_decoder();
 
   const js_string_from_raw = function (mu8, ptr, len) {
     const u8s = mu8.subarray(ptr, ptr + len);
-    const td = new TextDecoder("UTF-8");
-    return td.decode(u8s);
+    return textDecoder.decode(u8s);
   };
+
+  function get_text_encoder() {
+    if (typeof TextEncoder == "function") {
+      return new TextEncoder("UTF-8");
+    } else {
+      const util = require("util");
+      const TextEncoder = util.TextEncoder;
+      return new TextEncoder("UTF-8");
+    }
+  }
+
+  const textEncoder = get_text_encoder();
 
   // this calls into wasm so invalidates existing memory.buffer
   // returns pointer and length wrapped in Uint32Array
   const new_pl_raw_string = function (wap_alloc, mem, js) {
-    const te = new TextEncoder("UTF-8");
-    const u8s = te.encode(js);
+    const u8s = textEncoder.encode(js);
     let pl = new Uint32Array(2);
     pl[1] = u8s.length;
     pl[0] = wap_alloc(pl[1]);
