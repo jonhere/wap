@@ -1,72 +1,93 @@
 //! Wap library allows you to write a web page (or node.js) app exclusively in Rust.
 //!
 
-
-use std::{mem, slice, str};
 use std::rc::{Rc, Weak};
-
+use std::{mem, slice, str};
 
 //https://github.com/brson/mir2wasm/issues/33
 //https://github.com/rust-lang/rust/issues/44006
 
 // see if this progresses https://github.com/rust-lang/rust/commit/6741e416feb54b18de41c348ecc70ba5cbc961ce
 
-//#[link(name = "env")] // error linking
-// check status for update https://github.com/rust-lang/rust/issues/52090
-extern "C" {
-    //#[link_name="wap_get"]
-    fn wap_get(instance: f64, from: f64, name_ptr: *const u8, name_len: usize, ret: *mut f64)
-        -> u8;
-    fn wap_clone(index: f64) -> f64;
-    fn wap_unmap(index: f64);
-    fn wap_set_null(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
-    fn wap_set_undefined(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
-    fn wap_set_boolean(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, val: bool);
-    fn wap_set_number(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, val: f64);
-    fn wap_set_string(
-        instance: f64,
-        object: f64,
-        name_ptr: *const u8,
-        name_len: usize,
-        val_ptr: *const u8,
-        val_len: usize,
-    );
-    fn wap_set_ref(instance: f64, object: f64, name_ptr: *const u8, name_len: usize, index: f64);
-    fn wap_new_object() -> f64;
-    fn wap_new_string(instance: f64, from_ptr: *const u8, from_len: usize) -> f64;
-    fn wap_new_construct(
-        instance: f64,
-        constructor_index: f64,
-        num_args: u32,
-        args_types: *const u8,
-        args: *const f64,
-    ) -> f64;
-    fn wap_call(
-        instance: f64,
-        index_of_function: f64,
-        num_args: u32,
-        args_types: *const u8,
-        args: *const f64,
-        ret: *mut f64,
-    ) -> u8;
-    fn wap_bound_call(
-        instance: f64,
-        index_of_object: f64,
-        index_of_function: f64,
-        num_args: u32,
-        args_types: *const u8,
-        args: *const f64,
-        ret: *mut f64,
-    ) -> u8;
-    fn wap_instanceof(instance: f64, object: f64, constructor: f64) -> bool;
-    fn wap_delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
-    fn wap_eq(first: f64, second: f64) -> bool;
-//fn wap new_boolean
-//fn wap new_number
-//fn wap_typeof(object: f64) -> u8
-//fn wap_member_typeof(instance: f64, object: f64, name: *const u8) -> u8
+mod wap_imp {
+    #[link(wasm_import_module = "WapImp")]
+    extern "C" {
+        //#[link_name = "get"]
+        pub fn get(
+            instance: f64,
+            from: f64,
+            name_ptr: *const u8,
+            name_len: usize,
+            ret: *mut f64,
+        ) -> u8;
+        pub fn clone(index: f64) -> f64;
+        pub fn unmap(index: f64);
+        pub fn set_null(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+        pub fn set_undefined(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+        pub fn set_boolean(
+            instance: f64,
+            object: f64,
+            name_ptr: *const u8,
+            name_len: usize,
+            val: bool,
+        );
+        pub fn set_number(
+            instance: f64,
+            object: f64,
+            name_ptr: *const u8,
+            name_len: usize,
+            val: f64,
+        );
+        pub fn set_string(
+            instance: f64,
+            object: f64,
+            name_ptr: *const u8,
+            name_len: usize,
+            val_ptr: *const u8,
+            val_len: usize,
+        );
+        pub fn set_ref(
+            instance: f64,
+            object: f64,
+            name_ptr: *const u8,
+            name_len: usize,
+            index: f64,
+        );
+        pub fn new_object() -> f64;
+        pub fn new_string(instance: f64, from_ptr: *const u8, from_len: usize) -> f64;
+        pub fn new_construct(
+            instance: f64,
+            constructor_index: f64,
+            num_args: u32,
+            args_types: *const u8,
+            args: *const f64,
+        ) -> f64;
+        pub fn call(
+            instance: f64,
+            index_of_function: f64,
+            num_args: u32,
+            args_types: *const u8,
+            args: *const f64,
+            ret: *mut f64,
+        ) -> u8;
+        pub fn bound_call(
+            instance: f64,
+            index_of_object: f64,
+            index_of_function: f64,
+            num_args: u32,
+            args_types: *const u8,
+            args: *const f64,
+            ret: *mut f64,
+        ) -> u8;
+        pub fn instanceof(instance: f64, object: f64, constructor: f64) -> bool;
+        pub fn delete(instance: f64, object: f64, name_ptr: *const u8, name_len: usize);
+        pub fn eq(first: f64, second: f64) -> bool;
+    //fn new_boolean - no practical use storing in in wap
+    //fn new_number - avoid to keep open for complex allocation; see new_key function
+    //fn typeof(object: f64) -> u8 - should know when get/new_strig called so don't see need
+    //fn member_typeof(instance: f64, object: f64, name: *const u8) -> u8 - just use get
+    }
 }
-
 // todo see if better as thread_local
 static mut INSTANCE: f64 = 0.0;
 
@@ -107,7 +128,7 @@ enum RetTypes {
 
 impl Drop for Index {
     fn drop(&mut self) {
-        unsafe { wap_unmap(self.0) };
+        unsafe { wap_imp::unmap(self.0) };
     }
 }
 
@@ -128,7 +149,7 @@ impl std::cmp::PartialEq for WapRc {
         if self.raw_index() == other.raw_index() {
             return true;
         }
-        unsafe { wap_eq(self.raw_index(), other.raw_index()) }
+        unsafe { wap_imp::eq(self.raw_index(), other.raw_index()) }
     }
 }
 
@@ -211,7 +232,7 @@ fn raw_instance() -> f64 {
 }
 
 pub fn webassembly_instance() -> WapRc {
-    let index = unsafe { wap_clone(raw_instance()) };
+    let index = unsafe { wap_imp::clone(raw_instance()) };
     WapRc::new(index)
 }
 
@@ -219,7 +240,7 @@ pub fn webassembly_instance() -> WapRc {
 /// WapRc are still safe to be dropped after calling this.
 /// So long as no refs are holding it elsewhere.
 pub unsafe fn shutdown() {
-    wap_unmap(INSTANCE);
+    wap_imp::unmap(INSTANCE);
     INSTANCE = 0.01;
 }
 
@@ -252,7 +273,7 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
-        mem::transmute(wap_get(
+        mem::transmute(wap_imp::get(
             raw_instance(),
             from.raw_index(),
             name,
@@ -282,7 +303,7 @@ pub fn get(from: &WapRc, name: &str) -> JsType {
 }
 
 pub fn new_object() -> WapRc {
-    let index = unsafe { wap_new_object() };
+    let index = unsafe { wap_imp::new_object() };
     WapRc::new(index)
 }
 
@@ -291,7 +312,7 @@ pub fn new_string(text: &str) -> WapRc {
     let text = v.as_mut_ptr();
     let len = v.len();
 
-    let index = unsafe { wap_new_string(raw_instance(), text, len) };
+    let index = unsafe { wap_imp::new_string(raw_instance(), text, len) };
     WapRc::new(index)
 }
 
@@ -304,12 +325,11 @@ fn raw_args(
     *const f64,
 ) {
     let mut persist_string_bytes = Vec::new();
-    let (at_buf, buf) = args.into_iter()
+    let (at_buf, buf) = args
+        .into_iter()
         .map(|arg| match arg {
             &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
-            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe {
-                mem::uninitialized()
-            }),
+            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe { mem::uninitialized() }),
             &JsType::Boolean(b) => (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
             &JsType::Number(n) => (RetTypes::Number as u8, n),
             &JsType::String(ref s) => {
@@ -325,9 +345,7 @@ fn raw_args(
                 (RetTypes::String as u8, f)
             }
             &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
-        })
-        .unzip::<_, _, Vec<u8>, Vec<f64>>();
-
+        }).unzip::<_, _, Vec<u8>, Vec<f64>>();
 
     let num_args = at_buf.len() as u32;
     let args_types_ptr = at_buf.as_ptr();
@@ -345,7 +363,7 @@ pub fn new_construct(constructor: &WapRc, args: &[JsType]) -> WapRc {
     let (_persist, num_args, args_types_ptr, args_ptr) = raw_args(args);
 
     let index = unsafe {
-        wap_new_construct(
+        wap_imp::new_construct(
             raw_instance(),
             constructor.raw_index(),
             num_args,
@@ -363,27 +381,27 @@ pub fn set(object: &WapRc, name: &str, to: JsType) {
 
     match to {
         JsType::Null => unsafe {
-            wap_set_null(raw_instance(), object.raw_index(), name, len);
+            wap_imp::set_null(raw_instance(), object.raw_index(), name, len);
         },
         JsType::Undefined => unsafe {
-            wap_set_undefined(raw_instance(), object.raw_index(), name, len);
+            wap_imp::set_undefined(raw_instance(), object.raw_index(), name, len);
         },
         JsType::Boolean(b) => unsafe {
-            wap_set_boolean(raw_instance(), object.raw_index(), name, len, b);
+            wap_imp::set_boolean(raw_instance(), object.raw_index(), name, len, b);
         },
         JsType::Number(n) => unsafe {
-            wap_set_number(raw_instance(), object.raw_index(), name, len, n);
+            wap_imp::set_number(raw_instance(), object.raw_index(), name, len, n);
         },
         JsType::String(s) => {
             let mut v = s.to_string().into_bytes();
             let s = v.as_mut_ptr();
             let s_len = v.len();
             unsafe {
-                wap_set_string(raw_instance(), object.raw_index(), name, len, s, s_len);
+                wap_imp::set_string(raw_instance(), object.raw_index(), name, len, s, s_len);
             }
         }
         JsType::Ref(r) => unsafe {
-            wap_set_ref(raw_instance(), object.raw_index(), name, len, r.raw_index());
+            wap_imp::set_ref(raw_instance(), object.raw_index(), name, len, r.raw_index());
         },
     }
 }
@@ -393,7 +411,7 @@ pub fn call(function: &WapRc, args: &[JsType]) -> JsType {
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
-        mem::transmute(wap_call(
+        mem::transmute(wap_imp::call(
             raw_instance(),
             function.raw_index(),
             num_args,
@@ -429,7 +447,7 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
 
     let mut ret64 = unsafe { mem::uninitialized::<f64>() };
     let ret_type: RetTypes = unsafe {
-        mem::transmute(wap_bound_call(
+        mem::transmute(wap_imp::bound_call(
             raw_instance(),
             object.raw_index(),
             function.raw_index(),
@@ -461,7 +479,7 @@ pub fn bound_call(object: &WapRc, function: &WapRc, args: &[JsType]) -> JsType {
 }
 
 pub fn instanceof(item: &WapRc, constructor: &WapRc) -> bool {
-    unsafe { wap_instanceof(raw_instance(), item.raw_index(), constructor.raw_index()) }
+    unsafe { wap_imp::instanceof(raw_instance(), item.raw_index(), constructor.raw_index()) }
 }
 
 pub fn delete(object: &WapRc, name: &str) {
@@ -470,7 +488,7 @@ pub fn delete(object: &WapRc, name: &str) {
     let len = v.len();
 
     unsafe {
-        wap_delete(raw_instance(), object.raw_index(), name, len);
+        wap_imp::delete(raw_instance(), object.raw_index(), name, len);
     }
 }
 
@@ -487,23 +505,20 @@ pub unsafe fn wap_begin_init(instance: f64, global: f64) -> WapRc {
 #[macro_export]
 macro_rules! wap_begin {
     ($fn:expr) => {
-#[no_mangle]
-pub extern "C" fn wap_begin(instance: f64, global: f64) {
-    assert_eq!(::std::mem::size_of::<usize>(), 4);
-    assert_eq!(::std::mem::size_of::<*mut u8>(), 4);
-    assert_eq!(::std::mem::size_of::<*mut std::os::raw::c_void>(), 4);
-    //assert_eq!(::std::mem::size_of::<c_char>(), 1);
+        #[no_mangle]
+        pub extern "C" fn wap_begin(instance: f64, global: f64) {
+            assert_eq!(::std::mem::size_of::<usize>(), 4);
+            assert_eq!(::std::mem::size_of::<*mut u8>(), 4);
+            assert_eq!(::std::mem::size_of::<*mut std::os::raw::c_void>(), 4);
+            //assert_eq!(::std::mem::size_of::<c_char>(), 1);
 
-    let global = unsafe { $crate::wap_begin_init(instance, global) };
+            let global = unsafe { $crate::wap_begin_init(instance, global) };
 
-    let f = $fn;
-    f(global);
-}
+            let f = $fn;
+            f(global);
+        }
     };
 }
-
-
-
 
 #[cfg(test)]
 mod tests {
