@@ -14,10 +14,10 @@
 
   // could start negative to double max range but small good to debug
   let next = 1;
-  const new_key = function () {
-    // breaks at f64 at 2^53
-    // since values are never number could switch code to more complex reusage of keys
-    // storing the max and with next pointing chain of any freed key/values
+  const new_handle = function () {
+    // breaks using f64 at 2^53 (Number.MAX_SAFE_INTEGER) // todo test how long it would take to reach
+    // since values are never number could switch code to more complex reusage of handles
+    // storing the max and with next pointing chain of any freed handles
     return next++;
   }
 
@@ -103,9 +103,9 @@
   }
 
 
-  const obj_call = function (obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
-    const instance = wap.get(instance_index);
-    const the_function = wap.get(index_of_function);
+  const obj_call = function (obj, instance_handle, handle_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
+    const instance = wap.get(instance_handle);
+    const the_function = wap.get(handle_of_function);
     const mem = instance.exports.memory;
     const args = get_args(mem.buffer, num_args, at_ptr, args_ptr);
 
@@ -140,24 +140,24 @@
       return TYPE_STRING;
 
     } else {
-      const index = new_key();
-      wap.set(index, ret);
-      debug("-> ref " + index);
+      const handle = new_handle();
+      wap.set(handle, ret);
+      debug("-> ref " + handle);
       const mf64 = new Float64Array(mem.buffer);
-      mf64[ret_ptr / 8] = index;
+      mf64[ret_ptr / 8] = handle;
       return TYPE_REF;
     }
   };
 
   const WapImp = {
-    get: function (instance_index, from_index, name_ptr, name_len, ret_ptr) {
-      const instance = wap.get(instance_index);
+    get: function (instance_handle, from_handle, name_ptr, name_len, ret_ptr) {
+      const instance = wap.get(instance_handle);
       const mem = instance.exports.memory;
       const mb = mem.buffer;
       const mu8 = new Uint8Array(mb);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
-      debug("i" + instance_index + " get " + from_index + "[" + name + "]");
-      const from = wap.get(from_index);
+      debug("i" + instance_handle + " get " + from_handle + "[" + name + "]");
+      const from = wap.get(from_handle);
 
       const ret = from[name];
 
@@ -191,138 +191,138 @@
         return TYPE_STRING;
 
       } else {
-        const index = new_key();
-        wap.set(index, ret);
-        debug("-> ref " + index);
+        const handle = new_handle();
+        wap.set(handle, ret);
+        debug("-> ref " + handle);
         const mf64 = new Float64Array(mb, ret_ptr, 1);
-        mf64[0] = index;
+        mf64[0] = handle;
         return TYPE_REF;
       }
     },
 
-    clone: function (from_index) {
-      const index = new_key();
-      wap.set(index, wap.get(from_index));
-      debug("clone " + from_index + " to " + index);
-      return index;
+    clone: function (from_handle) {
+      const handle = new_handle();
+      wap.set(handle, wap.get(from_handle));
+      debug("clone " + from_handle + " to " + handle);
+      return handle;
     },
 
-    unmap: function (index) {
-      debug("will unmap: " + index + " mapped total: " + wap.size);
-      wap.delete(index);
+    unmap: function (handle) {
+      debug("will unmap: " + handle + " mapped total: " + wap.size);
+      wap.delete(handle);
     },
 
     new_object: function () {
       const o = {};
-      const index = new_key();
-      wap.set(index, o);
-      debug("new object " + index);
-      return index;
+      const handle = new_handle();
+      wap.set(handle, o);
+      debug("new object " + handle);
+      return handle;
     },
 
-    new_string: function (instance_index, text_ptr, text_len) {
-      const instance = wap.get(instance_index);
+    new_string: function (instance_handle, text_ptr, text_len) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
       const text = js_string_from_raw(mu8, text_ptr, text_len);
-      const index = new_key();
-      wap.set(index, text);
-      debug("i" + instance_index + " new_string " + text + " " + index);
-      return index;
+      const handle = new_handle();
+      wap.set(handle, text);
+      debug("i" + instance_handle + " new_string " + text + " " + handle);
+      return handle;
     },
 
-    new_construct: function (instance_index, constructor_index, num_args, at_ptr, args_ptr) {
-      const instance = wap.get(instance_index);
-      const target = wap.get(constructor_index);
+    new_construct: function (instance_handle, constructor_handle, num_args, at_ptr, args_ptr) {
+      const instance = wap.get(instance_handle);
+      const target = wap.get(constructor_handle);
       const args = get_args(instance.exports.memory.buffer, num_args, at_ptr, args_ptr);
 
       const c = Reflect.construct(target, args);
 
-      const index = new_key();
-      wap.set(index, c);
-      debug("i" + instance_index + " new_construct " + text + " " + index);
-      return index;
+      const handle = new_handle();
+      wap.set(handle, c);
+      debug("i" + instance_handle + " new_construct " + text + " " + handle);
+      return handle;
     },
 
-    set_null: function (instance_index, object_index, name_ptr, name_len) {
-      const instance = wap.get(instance_index);
+    set_null: function (instance_handle, object_handle, name_ptr, name_len) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       o[name] = null;
     },
 
-    set_undefined: function (instance_index, object_index, name_ptr, name_len) {
-      const instance = wap.get(instance_index);
+    set_undefined: function (instance_handle, object_handle, name_ptr, name_len) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       o[name] = undefined;
     },
 
-    set_boolean: function (instance_index, object_index, name_ptr, name_len, val) {
-      const instance = wap.get(instance_index);
+    set_boolean: function (instance_handle, object_handle, name_ptr, name_len, val) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       o[name] = val > 0 ? true : false;
     },
 
-    set_number: function (instance_index, object_index, name_ptr, name_len, val) {
-      const instance = wap.get(instance_index);
+    set_number: function (instance_handle, object_handle, name_ptr, name_len, val) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       o[name] = val;
     },
 
-    set_string: function (instance_index, object_index, name_ptr, name_len, val_ptr, val_len) {
-      const instance = wap.get(instance_index);
+    set_string: function (instance_handle, object_handle, name_ptr, name_len, val_ptr, val_len) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       const val = js_string_from_raw(mu8, val_ptr, val_len);
       o[name] = val;
     },
 
-    set_ref: function (instance_index, object_index, name_ptr, name_len, index) {
-      const instance = wap.get(instance_index);
+    set_ref: function (instance_handle, object_handle, name_ptr, name_len, handle) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const o = wap.get(object_index);
+      const o = wap.get(object_handle);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
-      o[name] = wap.get(index);
+      o[name] = wap.get(handle);
     },
 
-    call: function (instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
-      debug("i" + instance_index + " call " + index_of_function + "(" + num_args + " args)");
-      return obj_call(this, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
+    call: function (instance_handle, handle_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
+      debug("i" + instance_handle + " call " + handle_of_function + "(" + num_args + " args)");
+      return obj_call(this, instance_handle, handle_of_function, num_args, at_ptr, args_ptr, ret_ptr);
     },
 
-    bound_call: function (instance_index, index_of_object, index_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
-      debug("i" + instance_index + " call " + index_of_object + "." + index_of_function + "(" + num_args + " args)");
-      const obj = wap.get(index_of_object);
-      return obj_call(obj, instance_index, index_of_function, num_args, at_ptr, args_ptr, ret_ptr);
+    bound_call: function (instance_handle, handle_of_object, handle_of_function, num_args, at_ptr, args_ptr, ret_ptr) {
+      debug("i" + instance_handle + " call " + handle_of_object + "." + handle_of_function + "(" + num_args + " args)");
+      const obj = wap.get(handle_of_object);
+      return obj_call(obj, instance_handle, handle_of_function, num_args, at_ptr, args_ptr, ret_ptr);
     },
 
-    instanceof: function (instance_index, index_of_object, constructor_index) {
-      const instance = wap.get(instance_index);
+    instanceof: function (instance_handle, handle_of_object, constructor_handle) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const obj = wap.get(index_of_object);
-      const type = wap.get(constructor_index);
-      debug("i" + instance_index + " " + index_of_object + ((obj instanceof type) ? " instance of " : " NOT instance of ") + constructor_index);
+      const obj = wap.get(handle_of_object);
+      const type = wap.get(constructor_handle);
+      debug("i" + instance_handle + " " + handle_of_object + ((obj instanceof type) ? " instance of " : " NOT instance of ") + constructor_handle);
       return obj instanceof type;
     },
 
-    delete: function (instance_index, index_of_object, name_ptr, name_len) {
-      const instance = wap.get(instance_index);
+    delete: function (instance_handle, handle_of_object, name_ptr, name_len) {
+      const instance = wap.get(instance_handle);
       const mu8 = new Uint8Array(instance.exports.memory.buffer);
-      const obj = wap.get(index_of_object);
+      const obj = wap.get(handle_of_object);
       const name = js_string_from_raw(mu8, name_ptr, name_len);
       delete obj[name];
     },
 
-    eq: function (first_index, second_index) {
-      const first = wap.get(first_index);
-      const second = wap.get(second_index);
+    eq: function (first_handle, second_handle) {
+      const first = wap.get(first_handle);
+      const second = wap.get(second_handle);
       return first === second;
     },
   };
@@ -376,10 +376,10 @@
       .then(({ module, instance }) => {
         out.module = module;
         out.instance = instance;
-        const inst = new_key();
+        const inst = new_handle();
         wap.set(inst, instance);
         debug("instance " + inst);
-        const glob = new_key();
+        const glob = new_handle();
         wap.set(glob, g());
         debug("global " + glob);
         out.status = "pre begin";
