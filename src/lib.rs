@@ -195,26 +195,27 @@ impl std::cmp::PartialEq for WapRc {
     }
 }
 
+#[allow(clippy::new_without_default_derive)]
 impl WapWeak {
     pub fn new() -> WapWeak {
         WapWeak(Weak::new())
     }
     pub fn upgrade(&self) -> Option<WapRc> {
-        self.0.upgrade().map(|rc| WapRc(rc))
+        self.0.upgrade().map(WapRc)
     }
 }
 
 impl JsType {
     pub fn is_null(&self) -> bool {
         match self {
-            &JsType::Null => true,
+            JsType::Null => true,
             _ => false,
         }
     }
 
     pub fn is_undefined(&self) -> bool {
         match self {
-            &JsType::Undefined => true,
+            JsType::Undefined => true,
             _ => false,
         }
     }
@@ -358,24 +359,18 @@ pub fn new_string(text: &str) -> WapRc {
     WapRc::new(index)
 }
 
-fn raw_args(
-    args: &[JsType],
-) -> (
-    (Vec<Vec<u8>>, Vec<u8>, Vec<f64>),
-    u32,
-    *const u8,
-    *const f64,
-) {
+type Persist = (Vec<Vec<u8>>, Vec<u8>, Vec<f64>);
+fn raw_args(args: &[JsType]) -> (Persist, u32, *const u8, *const f64) {
     let mut persist_string_bytes = Vec::new();
     let (at_buf, buf) = args
-        .into_iter()
+        .iter()
         .map(|arg| match arg {
-            &JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
-            &JsType::Undefined => (RetTypes::Undefined as u8, unsafe { mem::uninitialized() }),
+            JsType::Null => (RetTypes::Null as u8, unsafe { mem::uninitialized() }),
+            JsType::Undefined => (RetTypes::Undefined as u8, unsafe { mem::uninitialized() }),
             &JsType::Boolean(b) => (RetTypes::Boolean as u8, if b { 1.0 } else { 0.0 }),
             &JsType::Number(n) => (RetTypes::Number as u8, n),
-            &JsType::String(ref s) => {
-                let mut v = s.clone().into_bytes();
+            JsType::String(s) => {
+                let v = s.clone().into_bytes();
                 let p = v.as_ptr();
                 let len = v.len();
                 persist_string_bytes.push(v);
@@ -386,8 +381,9 @@ fn raw_args(
                 };
                 (RetTypes::String as u8, f)
             }
-            &JsType::Ref(ref r) => (RetTypes::Ref as u8, r.raw_index()),
-        }).unzip::<_, _, Vec<u8>, Vec<f64>>();
+            JsType::Ref(r) => (RetTypes::Ref as u8, r.raw_index()),
+        })
+        .unzip::<_, _, Vec<u8>, Vec<f64>>();
 
     let num_args = at_buf.len() as u32;
     let args_types_ptr = at_buf.as_ptr();

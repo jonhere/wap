@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate wap;
-
 use std::cell::RefCell;
 use wap::*;
 

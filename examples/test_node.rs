@@ -1,5 +1,4 @@
-#[macro_use]
-extern crate wap;
+#![allow(clippy::cyclomatic_complexity)]
 use wap::*;
 
 wap_begin!(|global| {
@@ -32,7 +31,8 @@ wap_begin!(|global| {
     */
     let confn = w!(eval(
         "let f = function(insout) { this.member = insout; }; f".to_string()
-    )).unwrap();
+    ))
+    .unwrap();
 
     //let cono = new_construct(&confn, &["testc".to_string().into()]);
     let cono = w!(new confn("testc".to_string()));
@@ -51,7 +51,10 @@ wap_begin!(|global| {
     set(&to, "abool", false.into());
     assert!(!get(&to, "abool").unwrap_boolean());
     set(&to, "anumber", 43.0.into());
-    assert_eq!(get(&to, "anumber").unwrap_number(), 43.0);
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(get(&to, "anumber").unwrap_number(), 43.0);
+    }
     set(&to, "astring", "wasm".to_string().into());
     assert_eq!(get(&to, "astring").unwrap_string(), "wasm");
     set(&to, "aselfref", to.clone().into());
@@ -62,13 +65,17 @@ wap_begin!(|global| {
         &["let f = function(insout) { return insout; }; f"
             .to_string()
             .into()],
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(call(&myfn, &[JsType::Null]).is_null());
     assert!(call(&myfn, &[JsType::Undefined]).is_undefined());
     assert!(call(&myfn, &[]).is_undefined());
     assert!(call(&myfn, &[true.into()]).unwrap_boolean());
-    assert_eq!(call(&myfn, &[43.2.into()]).unwrap_number(), 43.2);
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(call(&myfn, &[43.2.into()]).unwrap_number(), 43.2);
+    }
     assert_eq!(
         call(&myfn, &["43".to_string().into()]).unwrap_string(),
         "43"
@@ -80,7 +87,8 @@ wap_begin!(|global| {
         &["let f = function(a1,a2,insout) { return insout; }; f"
             .to_string()
             .into()],
-    ).unwrap();
+    )
+    .unwrap();
     assert!(call(&myfn, &["".to_string().into(), 43.0.into(), JsType::Null]).is_null());
 
     let myfn = call(
@@ -88,15 +96,19 @@ wap_begin!(|global| {
         &["let f = function(item) { return this[item]; }; f"
             .to_string()
             .into()],
-    ).unwrap();
+    )
+    .unwrap();
 
     assert!(bound_call(&to, &myfn, &["isanull".to_string().into()]).is_null());
     assert!(bound_call(&to, &myfn, &["isundefined".to_string().into()]).is_undefined());
     assert!(!bound_call(&to, &myfn, &["abool".to_string().into()]).unwrap_boolean());
-    assert_eq!(
-        bound_call(&to, &myfn, &["anumber".to_string().into()]).unwrap_number(),
-        43.0
-    );
+    #[allow(clippy::float_cmp)]
+    {
+        assert_eq!(
+            bound_call(&to, &myfn, &["anumber".to_string().into()]).unwrap_number(),
+            43.0
+        );
+    }
     assert_eq!(
         bound_call(&to, &myfn, &["astring".to_string().into()]).unwrap_string(),
         "wasm"
